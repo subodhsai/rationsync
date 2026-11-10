@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment and secrets (only .env.example files are committed)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+supabase/.temp/
+supabase/.branches/
+
+# Tests and tooling
+coverage/
+.vitest/
+playwright-report/
+test-results/
+.playwright-mcp/
+unslop/
+
+# Logs
+npm-debug.log*
+*.log
+
+# Editors and OS
+.vercel/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

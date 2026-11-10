@@ -1,0 +1,116 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * RationSync tokens. Contrast measured against the surface they sit on (WCAG 2.2):
+ *   foreground on background 14.7:1 · muted-foreground on background 6.2:1
+ *   primary-foreground on primary 7.9:1 · warning on card 5.3:1 · destructive on card 6.3:1
+ *   input border on card 3.6:1 (UI component boundary, needs 3:1)
+ * See docs/design-system.md before adding a colour.
+ */
+
+@theme inline {
+  --font-sans: var(--font-atkinson), var(--font-kannada), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: var(--font-atkinson-mono), ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-tint: var(--primary-tint);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-warning: var(--warning);
+  --color-warning-tint: var(--warning-tint);
+  --color-destructive: var(--destructive);
+  --color-destructive-tint: var(--destructive-tint);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) * 0.75);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.25);
+  --radius-3xl: calc(var(--radius) * 1.25);
+  --radius-4xl: calc(var(--radius) * 1.25);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root {
+  --background: #f7f8f6;
+  --foreground: #182620;
+  --card: #ffffff;
+  --card-foreground: #182620;
+  --popover: #ffffff;
+  --popover-foreground: #182620;
+  --primary: #215b45;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1b4c3a;
+  --primary-tint: #e8f1ec;
+  --secondary: #eef2ef;
+  --secondary-foreground: #182620;
+  --muted: #eef2ef;
+  --muted-foreground: #506158;
+  --accent: #eef2ef;
+  --accent-foreground: #182620;
+  --warning: #94601a;
+  --warning-tint: #fbf3e6;
+  --destructive: #a43e3e;
+  --destructive-tint: #fbedec;
+  --border: #dde5df;
+  --input: #7a8b82;
+  --ring: #215b45;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  /* Kannada script needs more vertical room than Latin. */
+  :lang(kn) {
+    line-height: 1.7;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

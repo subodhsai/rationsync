@@ -1,0 +1,20 @@
+{
+  "name": "rationsync",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev:web": "npm run dev -w @rationsync/web",
+    "dev:api": "npm run dev -w @rationsync/api",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run build -w @rationsync/shared && npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
