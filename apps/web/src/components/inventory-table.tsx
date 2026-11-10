@@ -1,13 +1,20 @@
 import { stockLevel, type InventoryItem } from "@rationsync/shared";
+import Link from "next/link";
 import { StockLevelLabel } from "@/components/status";
 import { StockMeter } from "@/components/stock-meter";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime, formatQuantity } from "@/lib/format";
 
-function Commodity({ item }: { item: InventoryItem }) {
+function Commodity({ item, href }: { item: InventoryItem; href?: string }) {
   return (
     <div>
-      <p className="font-medium">{item.nameEn}</p>
+      {href ? (
+        <Link href={href} className="font-medium text-primary underline-offset-4 hover:underline">
+          {item.nameEn}
+        </Link>
+      ) : (
+        <p className="font-medium">{item.nameEn}</p>
+      )}
       <p lang="kn" className="text-[0.8125rem] text-muted-foreground">
         {item.nameKn}
       </p>
@@ -23,7 +30,15 @@ function Quantity({ value, unit }: { value: number; unit: string }) {
   );
 }
 
-export function InventoryTable({ items, showUpdated = true }: { items: InventoryItem[]; showUpdated?: boolean }) {
+export function InventoryTable({
+  items,
+  showUpdated = true,
+  hrefFor,
+}: {
+  items: InventoryItem[];
+  showUpdated?: boolean;
+  hrefFor?: (item: InventoryItem) => string;
+}) {
   return (
     <>
       {/* Phones: one row per commodity, nothing clipped. */}
@@ -31,7 +46,7 @@ export function InventoryTable({ items, showUpdated = true }: { items: Inventory
         {items.map((item) => (
           <li key={item.commodityCode} className="space-y-3 p-4">
             <div className="flex items-start justify-between gap-3">
-              <Commodity item={item} />
+              <Commodity item={item} href={hrefFor?.(item)} />
               <StockLevelLabel level={stockLevel(item.quantity, item.lowStockThreshold)} />
             </div>
             <div className="flex items-baseline justify-between text-[0.9375rem]">
@@ -60,7 +75,7 @@ export function InventoryTable({ items, showUpdated = true }: { items: Inventory
             {items.map((item) => (
               <TableRow key={item.commodityCode}>
                 <TableCell className="py-3 pl-4">
-                  <Commodity item={item} />
+                  <Commodity item={item} href={hrefFor?.(item)} />
                 </TableCell>
                 <TableCell className="text-right">
                   <Quantity value={item.quantity} unit={item.unit} />

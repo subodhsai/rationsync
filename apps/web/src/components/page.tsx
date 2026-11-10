@@ -1,3 +1,5 @@
+import { ChevronLeft } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -31,5 +33,45 @@ export function PageSkeleton() {
       </div>
       <Skeleton className="h-64 w-full" />
     </div>
+  );
+}
+
+/** A titled section on a plain surface. */
+export function Panel({ title, description, children, id }: { title: string; description?: ReactNode; children: ReactNode; id?: string }) {
+  const headingId = id ?? title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return (
+    <section aria-labelledby={headingId} className="rounded-lg border border-border bg-card p-4 sm:p-5">
+      <h2 id={headingId} className="text-lg font-semibold">
+        {title}
+      </h2>
+      {description && <div className="mt-1 text-[0.9375rem] text-muted-foreground">{description}</div>}
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+export function BackLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex min-h-11 items-center gap-1 text-[0.9375rem] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+    >
+      <ChevronLeft className="size-4" aria-hidden="true" />
+      {children}
+    </Link>
+  );
+}
+
+/** Label and value rows, for application details. */
+export function DetailList({ rows }: { rows: Array<[string, ReactNode]> }) {
+  return (
+    <dl className="divide-y divide-border text-[0.9375rem]">
+      {rows.map(([label, value]) => (
+        <div key={label} className="grid gap-1 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-4">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }

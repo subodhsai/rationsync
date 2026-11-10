@@ -3,10 +3,11 @@ import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { AlertList } from "@/components/alert-list";
+import { MovementList } from "@/components/movement-list";
 import { PageHeader, PageSkeleton } from "@/components/page";
-import { ShopStatusLabel, StockLevelLabel } from "@/components/status";
-import { getShopInventory } from "@/lib/data";
-import { formatQuantity } from "@/lib/format";
+import { ShopStatusLabel } from "@/components/status";
+import { getMovements, getShopAlerts, getShopInventory } from "@/lib/data";
 import { requireApprovedShop } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Shop overview" };
@@ -19,18 +20,35 @@ export default function ShopOverviewPage() {
   );
 }
 
+function SectionHeading({ id, title, href, linkLabel }: { id: string; title: string; href: string; linkLabel: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <h2 id={id} className="text-lg font-semibold">
+        {title}
+      </h2>
+      <Link
+        href={href}
+        className="inline-flex min-h-11 items-center gap-1 text-[0.9375rem] font-medium text-primary underline-offset-4 hover:underline"
+      >
+        {linkLabel}
+        <ArrowRight className="size-4" aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
 async function Overview() {
   const session = await requireApprovedShop();
-  const items = await getShopInventory(session);
-  const withLevel = items.map((item) => ({ ...item, level: stockLevel(item.quantity, item.lowStockThreshold) }));
-  const attention = withLevel
-    .filter((item) => item.level !== "ok")
-    .sort((a, b) => (a.level === b.level ? 0 : a.level === "out" ? -1 : 1));
-
+  const [items, alerts, recent] = await Promise.all([
+    getShopInventory(session),
+    getShopAlerts(session, "open"),
+    getMovements(session, { limit: 5 }),
+  ]);
+  const levels = items.map((i) => stockLevel(i.quantity, i.lowStockThreshold));
   const stats = [
     { label: "Commodities tracked", value: items.length },
-    { label: "Low stock", value: withLevel.filter((i) => i.level === "low").length },
-    { label: "Out of stock", value: withLevel.filter((i) => i.level === "out").length },
+    { label: "Low stock", value: levels.filter((l) => l === "low").length },
+    { label: "Out of stock", value: levels.filter((l) => l === "out").length },
   ];
 
   return (
@@ -55,38 +73,18 @@ async function Overview() {
       </dl>
 
       <section aria-labelledby="attention" className="space-y-3">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 id="attention" className="text-lg font-semibold">
-            Needs attention
-          </h2>
-          <Link
-            href="/shop/inventory"
-            className="inline-flex min-h-11 items-center gap-1 text-[0.9375rem] font-medium text-primary underline-offset-4 hover:underline"
-          >
-            Full inventory
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
-        {attention.length === 0 ? (
-          <p className="rounded-lg border border-border bg-card px-4 py-5 text-[0.9375rem] text-muted-foreground">
-            Every commodity is above its low-stock threshold.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-            {attention.map((item) => (
-              <li key={item.commodityCode} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                <div>
-                  <p className="font-medium">{item.nameEn}</p>
-                  <p className="text-[0.875rem] text-muted-foreground tabular-nums">
-                    {formatQuantity(item.quantity)} {item.unit} left, threshold {formatQuantity(item.lowStockThreshold)}{" "}
-                    {item.unit}
-                  </p>
-                </div>
-                <StockLevelLabel level={item.level} />
-              </li>
-            ))}
-          </ul>
-        )}
+        <SectionHeading id="attention" title="Needs attention" href="/shop/alerts" linkLabel="All alerts" />
+        <AlertList
+          items={alerts}
+          showShop={false}
+          linkTo={(a) => `/shop/inventory/${a.commodityCode}`}
+          emptyTitle="Every commodity is above its low-stock threshold."
+        />
+      </section>
+
+      <section aria-labelledby="recent" className="space-y-3">
+        <SectionHeading id="recent" title="Recent stock movements" href="/shop/movements" linkLabel="Full ledger" />
+        <MovementList items={recent.items} />
       </section>
     </>
   );

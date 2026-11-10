@@ -1,6 +1,6 @@
 "use client";
 
-import { Boxes, ClipboardCheck, LayoutGrid, Menu } from "lucide-react";
+import { BellRing, Boxes, ClipboardCheck, History, LayoutGrid, Menu, ScrollText, Store } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -16,16 +16,27 @@ const navigation: Record<ConsoleArea, Array<{ href: string; label: string; icon:
   shop: [
     { href: "/shop", label: "Overview", icon: LayoutGrid },
     { href: "/shop/inventory", label: "Inventory", icon: Boxes },
+    { href: "/shop/movements", label: "Stock movements", icon: ScrollText },
+    { href: "/shop/alerts", label: "Low-stock alerts", icon: BellRing },
   ],
-  warehouse: [{ href: "/warehouse", label: "Shop registrations", icon: ClipboardCheck }],
+  warehouse: [
+    { href: "/warehouse", label: "Applications", icon: ClipboardCheck },
+    { href: "/warehouse/shops", label: "Shop directory", icon: Store },
+    { href: "/warehouse/alerts", label: "Low stock", icon: BellRing },
+    { href: "/warehouse/history", label: "Decisions", icon: History },
+  ],
 };
+
+// Shop detail pages are reached from several lists, so they highlight none; their back link orients.
+const isActive = (pathname: string, href: string, area: ConsoleArea) =>
+  href === `/${area}` || href === "/warehouse/shops" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
 export function NavLinks({ area, onNavigate }: { area: ConsoleArea; onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
     <ul className="space-y-1">
       {navigation[area].map(({ href, label, icon: Icon }) => {
-        const active = pathname === href;
+        const active = isActive(pathname, href, area);
         return (
           <li key={href}>
             <Link

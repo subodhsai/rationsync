@@ -1,4 +1,4 @@
-import type { ShopStatus, StockLevel } from "@rationsync/shared";
+import type { AlertStatus, ShopStatus, StockLevel } from "@rationsync/shared";
 import { CircleAlert, CircleCheck, CircleX, Clock } from "lucide-react";
 import type { ComponentType } from "react";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,18 @@ export function ShopStatusLabel({ status }: { status: ShopStatus }) {
   return (
     <StatusLabel tone={s.tone} icon={s.icon}>
       {s.label}
+    </StatusLabel>
+  );
+}
+
+export function AlertStatusLabel({ status }: { status: AlertStatus }) {
+  return status === "open" ? (
+    <StatusLabel tone="warning" icon={CircleAlert}>
+      Open
+    </StatusLabel>
+  ) : (
+    <StatusLabel tone="neutral" icon={CircleCheck}>
+      Resolved
     </StatusLabel>
   );
 }

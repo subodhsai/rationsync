@@ -12,19 +12,19 @@ insert into public.warehouses (id, code, name, district, taluk, address) values
    'Shed 2, Demo APMC Yard, Amargol, Hubballi');
 
 insert into public.shops
-  (id, fps_id, warehouse_id, name, district, taluk, address, contact_phone, opening_hours, status, review_reason, reviewed_at)
+  (id, fps_id, warehouse_id, name, district, taluk, address, pin_code, contact_phone, opening_hours, status, review_reason, reviewed_at)
 values
   ('0d9a0000-0000-4000-b000-000000000101', 'DEMO-FPS-MYS-0101', '0d9a0000-0000-4000-a000-000000000001',
-   'Demo FPS Kuvempunagar', 'Mysuru', 'Mysuru', '2nd Cross, Kuvempunagar, Mysuru',
+   'Demo FPS Kuvempunagar', 'Mysuru', 'Mysuru', '2nd Cross, Kuvempunagar, Mysuru', '570023',
    '+91 90000 00101', 'Mon to Sat, 8:00 to 12:00 and 16:00 to 20:00', 'approved', 'Demo seed record', now()),
   ('0d9a0000-0000-4000-b000-000000000102', 'DEMO-FPS-MYS-0102', '0d9a0000-0000-4000-a000-000000000001',
-   'Demo FPS Vijayanagar', 'Mysuru', 'Mysuru', '4th Main, Vijayanagar 2nd Stage, Mysuru',
+   'Demo FPS Vijayanagar', 'Mysuru', 'Mysuru', '4th Main, Vijayanagar 2nd Stage, Mysuru', '570017',
    '+91 90000 00102', 'Mon to Sat, 8:00 to 12:00 and 16:00 to 20:00', 'approved', 'Demo seed record', now()),
   ('0d9a0000-0000-4000-b000-000000000201', 'DEMO-FPS-DWD-0201', '0d9a0000-0000-4000-a000-000000000002',
-   'Demo FPS Vidyanagar', 'Dharwad', 'Hubballi', 'Near Bus Stop, Vidyanagar, Hubballi',
+   'Demo FPS Vidyanagar', 'Dharwad', 'Hubballi', 'Near Bus Stop, Vidyanagar, Hubballi', '580021',
    '+91 90000 00201', 'Mon to Sat, 8:30 to 12:30 and 16:00 to 19:30', 'approved', 'Demo seed record', now()),
   ('0d9a0000-0000-4000-b000-000000000202', 'DEMO-FPS-DWD-0202', '0d9a0000-0000-4000-a000-000000000002',
-   'Demo FPS Keshwapur', 'Dharwad', 'Hubballi', 'Market Road, Keshwapur, Hubballi',
+   'Demo FPS Keshwapur', 'Dharwad', 'Hubballi', 'Market Road, Keshwapur, Hubballi', '580023',
    '+91 90000 00202', 'Mon to Sat, 8:30 to 12:30 and 16:00 to 19:30', 'approved', 'Demo seed record', now());
 
 -- Opening balances go through the same function as every later movement, so each
@@ -32,10 +32,10 @@ values
 select public.apply_stock_movement(s.shop_id::uuid, s.code, 'opening_balance', s.qty,
                                    'Demo opening balance', null, 'seed-opening-' || s.shop_id || '-' || s.code)
 from (values
-  ('0d9a0000-0000-4000-b000-000000000101', 'RICE', 1840.00),
+  ('0d9a0000-0000-4000-b000-000000000101', 'RICE', 2400.00),
   ('0d9a0000-0000-4000-b000-000000000101', 'WHEAT', 120.00),
   ('0d9a0000-0000-4000-b000-000000000101', 'RAGI', 410.00),
-  ('0d9a0000-0000-4000-b000-000000000101', 'SUGAR', 35.00),
+  ('0d9a0000-0000-4000-b000-000000000101', 'SUGAR', 60.00),
   ('0d9a0000-0000-4000-b000-000000000102', 'RICE', 960.00),
   ('0d9a0000-0000-4000-b000-000000000102', 'RAGI', 520.00),
   ('0d9a0000-0000-4000-b000-000000000102', 'SUGAR', 90.00),
@@ -45,6 +45,15 @@ from (values
   ('0d9a0000-0000-4000-b000-000000000202', 'RICE', 640.00),
   ('0d9a0000-0000-4000-b000-000000000202', 'JOWAR', 610.00)
 ) as s (shop_id, code, qty);
+
+-- A little ledger history for the first shop. Final balances: rice 1,840 kg, sugar 35 kg.
+select public.apply_stock_movement('0d9a0000-0000-4000-b000-000000000101', m.code, 'distribution', m.qty,
+                                   m.reason, null, m.key)
+from (values
+  ('RICE', -320.00, 'Distributed to card holders, morning session', 'seed-dist-0101-1'),
+  ('RICE', -240.00, 'Distributed to card holders, evening session', 'seed-dist-0101-2'),
+  ('SUGAR', -25.00, 'Distributed to AAY card holders', 'seed-dist-0101-3')
+) as m (code, qty, reason, key);
 
 -- Thresholds are set per shop by the shop administrator; these are demo starting values.
 update public.shop_inventory set low_stock_threshold = case commodity_code
@@ -58,6 +67,9 @@ end;
 -- Commodities a shop stocks but has run out of.
 insert into public.shop_inventory (shop_id, commodity_code, quantity, low_stock_threshold) values
   ('0d9a0000-0000-4000-b000-000000000102', 'WHEAT', 0, 150);
+
+-- Open alerts for every row now at or below its threshold.
+select public.refresh_stock_alert(shop_id, commodity_code) from public.shop_inventory;
 
 insert into public.demo_ration_cards (card_number, head_of_family, category, member_count, shop_id)
 select format('DEMO-%s', lpad(n::text, 6, '0')),

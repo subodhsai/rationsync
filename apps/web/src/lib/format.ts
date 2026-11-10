@@ -1,4 +1,4 @@
-import type { AppRole } from "@rationsync/shared";
+import type { AppRole, MovementKind } from "@rationsync/shared";
 
 const number = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 const dateTime = new Intl.DateTimeFormat("en-IN", {
@@ -28,3 +28,18 @@ export const roleLabel: Record<AppRole, string> = {
   shop_admin: "Shop administrator",
   warehouse_admin: "Warehouse administrator",
 };
+
+export const movementKindLabel: Record<MovementKind, string> = {
+  opening_balance: "Opening balance",
+  receipt: "Received from warehouse",
+  distribution: "Distributed",
+  adjustment: "Adjustment",
+};
+
+/** "+500 kg" / "−120.5 kg", with a true minus sign. */
+export const formatDelta = (value: number, unit: string) =>
+  `${value > 0 ? "+" : "−"}${formatQuantity(Math.abs(value))} ${unit}`;
+
+const fileSize = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 });
+export const formatBytes = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${fileSize.format(bytes / 1024)} KB` : `${fileSize.format(bytes / 1024 / 1024)} MB`;

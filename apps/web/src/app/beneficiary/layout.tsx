@@ -1,5 +1,16 @@
-import { SimpleShell } from "@/components/app-shell";
+import { Suspense } from "react";
+import { ShellFallback, SimpleShell } from "@/components/app-shell";
+import { requireRole } from "@/lib/session";
+
+async function BeneficiaryGate({ children }: { children: React.ReactNode }) {
+  await requireRole("beneficiary");
+  return <SimpleShell>{children}</SimpleShell>;
+}
 
 export default function BeneficiaryLayout({ children }: LayoutProps<"/beneficiary">) {
-  return <SimpleShell>{children}</SimpleShell>;
+  return (
+    <Suspense fallback={<ShellFallback />}>
+      <BeneficiaryGate>{children}</BeneficiaryGate>
+    </Suspense>
+  );
 }

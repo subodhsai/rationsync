@@ -3,6 +3,7 @@ import { Suspense, type ReactNode } from "react";
 import { Brand } from "@/components/brand";
 import { MobileNav, NavLinks, type ConsoleArea } from "@/components/nav";
 import { DemoDataNotice, PrototypeNotice } from "@/components/notices";
+import { PageSkeleton } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { signOut } from "@/lib/actions";
@@ -92,6 +93,26 @@ export function SimpleShell({ children, signedIn = true }: { children: ReactNode
       <main id="main" className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         <DemoDataNotice />
         {children}
+      </main>
+    </>
+  );
+}
+
+/**
+ * Neutral placeholder while a role layout authorises the session. It shows no role-specific
+ * navigation, so a person never glimpses another role's area before being redirected.
+ */
+export function ShellFallback() {
+  return (
+    <>
+      <PrototypeNotice />
+      <header className="border-b border-border bg-card">
+        <div className="mx-auto flex h-14 max-w-6xl items-center px-2 sm:px-6">
+          <Brand className="px-2" />
+        </div>
+      </header>
+      <main id="main" className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+        <PageSkeleton />
       </main>
     </>
   );

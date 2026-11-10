@@ -1,6 +1,11 @@
 import { PGlite } from "@electric-sql/pglite";
+import { SignJWT } from "jose";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pino } from "pino";
+import { createApp } from "../src/app.js";
+import { createTokenVerifier } from "../src/auth.js";
+import { loadConfig } from "../src/config.js";
 
 const supabaseDir = join(import.meta.dirname, "../../../supabase");
 
@@ -32,4 +37,27 @@ export async function linkCard(db: PGlite, userId: string, shopId: string) {
       limit 1`,
     [userId, shopId],
   );
+}
+
+const SUPABASE_URL = "https://demo-project.supabase.co";
+const SECRET = "test-secret-that-is-at-least-32-characters-long";
+
+/** The real Express app wired to a PGlite database, accepting test-signed HS256 sessions. */
+export function createTestApp(pg: PGlite) {
+  const config = loadConfig({ NODE_ENV: "test", SUPABASE_URL, DATABASE_URL: "pglite" });
+  const app = createApp({
+    config,
+    logger: pino({ level: "silent" }),
+    db: { query: (text, params) => pg.query(text, params) },
+    verifyToken: createTokenVerifier(SUPABASE_URL, SECRET),
+  });
+  const bearer = async (sub: string) =>
+    `Bearer ${await new SignJWT({ role: "authenticated" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject(sub)
+      .setIssuer(`${SUPABASE_URL}/auth/v1`)
+      .setAudience("authenticated")
+      .setExpirationTime("5m")
+      .sign(new TextEncoder().encode(SECRET))}`;
+  return { app, bearer };
 }

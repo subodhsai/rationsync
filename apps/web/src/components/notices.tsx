@@ -20,8 +20,8 @@ export function DemoDataNotice() {
     >
       <FlaskConical className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <p>
-        <span className="font-semibold">Demo data.</span> Fictional records for preview. Sign-in and live data turn on
-        once Supabase is configured.
+        <span className="font-semibold">Demo data.</span> Fictional records for preview. Forms check what you enter
+        but save nothing. Sign-in and live data turn on once Supabase is configured.
       </p>
     </div>
   );

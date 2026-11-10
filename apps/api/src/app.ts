@@ -8,6 +8,7 @@ import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { errorHandler, HttpError, notFound } from "./errors.js";
 import { beneficiaryRouter } from "./routes/beneficiary.js";
+import { registrationRouter } from "./routes/registration.js";
 import { shopRouter } from "./routes/shop.js";
 import { warehouseRouter } from "./routes/warehouse.js";
 
@@ -50,6 +51,7 @@ export function createApp({ config, logger, db, verifyToken }: AppDeps) {
     v1.get("/me", (req, res) => {
       res.json(actorOf(req));
     });
+    v1.use("/registration", registrationRouter(db));
     v1.use("/shop", shopRouter(db));
     v1.use("/warehouse", warehouseRouter(db));
     v1.use("/beneficiary", beneficiaryRouter(db));

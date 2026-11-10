@@ -49,3 +49,16 @@ Audit of the running pages at 1440px and 390px. Findings fixed:
 7. Unused generated components (dropdown, tabs, card, separator, toast) were deleted.
 
 Checked and kept: no gradients, glows, emoji, invented metrics or stock imagery; one accent; every status pairs text and icon; no horizontal scroll at 390px; tables become lists on phones.
+
+## Unslop review (Phase 2)
+
+Audit of the running registration, commodity, review and alert screens at 1280px and 390px. Findings fixed:
+
+1. Preview mode accepted a distribution larger than the stock on hand. Preview now gives the same answers as the API (insufficient stock, opening balance already recorded), with the same messages.
+2. A "Preview mode" note repeated under every form on top of the page banner; replaced by one sentence in the banner.
+3. Invalid inputs drew a pink glow ring; the red border alone marks them now.
+4. "Shop directory" was highlighted while reviewing a pending application; shop detail pages highlight no nav item and rely on their back link.
+5. "Decision" appeared as both the panel title and the field legend; the legend is screen-reader only.
+6. A preview message used a hyphen as a minus sign; quantities use a true minus.
+
+Decisions taken from the skills: review decisions use a two-step confirmation stating the consequence (UI UX Pro Max: confirm irreversible actions; Apple Design: confirmation only where it cannot be undone). Forms keep what was typed after an error and move focus to an announced summary. Tables become lists on phones. Alerts are ordered by urgency and show the threshold behind them; nothing is labelled as a prediction.

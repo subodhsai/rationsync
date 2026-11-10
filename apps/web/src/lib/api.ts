@@ -7,20 +7,22 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly details?: unknown,
   ) {
     super(message);
   }
 }
 
-export async function apiGet<T>(path: string, accessToken: string): Promise<T> {
+async function call<T>(path: string, accessToken: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${publicEnv.apiUrl}${path}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      ...init,
+      headers: { Authorization: `Bearer ${accessToken}`, ...init.headers },
       cache: "no-store",
     });
   } catch {
-    throw new ApiError(0, "api_unreachable", "The RationSync API could not be reached.");
+    throw new ApiError(0, "api_unreachable", "The RationSync API could not be reached. Try again in a moment.");
   }
 
   const body = (await res.json().catch(() => null)) as (T & Partial<ApiErrorBody>) | null;
@@ -29,7 +31,26 @@ export async function apiGet<T>(path: string, accessToken: string): Promise<T> {
       res.status,
       body?.error?.code ?? "request_failed",
       body?.error?.message ?? `The API answered with status ${res.status}.`,
+      body?.error?.details,
     );
   }
   return body as T;
+}
+
+export function apiGet<T>(path: string, accessToken: string): Promise<T> {
+  return call<T>(path, accessToken);
+}
+
+export function apiSend<T>(
+  method: "POST" | "PATCH",
+  path: string,
+  accessToken: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<T> {
+  return call<T>(path, accessToken, {
+    method,
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json", ...headers },
+  });
 }

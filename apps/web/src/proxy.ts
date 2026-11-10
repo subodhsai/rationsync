@@ -2,9 +2,21 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, publicEnv } from "@/lib/env";
 
-// Keeps the Supabase session cookie fresh. Authorization is decided by the API, not here.
+const PROTECTED = ["/shop", "/warehouse", "/beneficiary", "/dashboard"];
+const DEMO_COOKIE = "rs_demo_persona";
+
+function toLogin(request: NextRequest) {
+  return NextResponse.redirect(new URL("/login", request.url));
+}
+
+// Keeps the Supabase session fresh and sends signed-out visitors to sign-in before any page
+// renders. Which role may see what is decided by the layouts (via the API) and the API itself.
 export async function proxy(request: NextRequest) {
-  if (!isSupabaseConfigured) return NextResponse.next();
+  const isProtected = PROTECTED.some((p) => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(`${p}/`));
+
+  if (!isSupabaseConfigured) {
+    return isProtected && !request.cookies.has(DEMO_COOKIE) ? toLogin(request) : NextResponse.next();
+  }
 
   let response = NextResponse.next({ request });
   const supabase = createServerClient(publicEnv.supabaseUrl, publicEnv.supabasePublishableKey, {
@@ -19,10 +31,12 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getClaims();
+  // getClaims verifies the token signature; an absent or invalid session yields no claims.
+  const { data } = await supabase.auth.getClaims();
+  if (isProtected && !data?.claims) return toLogin(request);
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)"],
 };
