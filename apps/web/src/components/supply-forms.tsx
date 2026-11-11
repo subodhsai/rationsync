@@ -67,6 +67,7 @@ export function ConfirmAction({
   triggerVariant = "outline",
   reason,
   date,
+  hidden,
 }: {
   action: Action;
   trigger: string;
@@ -79,6 +80,8 @@ export function ConfirmAction({
   reason?: { name: string; label: string; hint?: string };
   /** An optional date field sent as `name`. */
   date?: { name: string; label: string; min: string; defaultValue: string };
+  /** Fixed values sent with the confirmation, such as the target status. */
+  hidden?: Record<string, string>;
 }) {
   const { state, onSubmit, pending, errorFor } = useFormAction(action);
   const [open, setOpen] = useState(false);
@@ -101,6 +104,9 @@ export function ConfirmAction({
       )}
     >
       <FormStatus state={state} />
+      {Object.entries(hidden ?? {}).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <p className="text-[0.9375rem]">
         <span className="font-medium">{question}</span> {consequence}
       </p>

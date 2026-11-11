@@ -393,6 +393,11 @@ export const demoAnalytics: CommodityAnalytics[] = demoWarehouseStock.map((w) =>
 });
 
 export const demoNotifications: Partial<Record<DemoPersona, AppNotification[]>> = {
+  beneficiary: [
+    { id: "h3", kind: "booking.reminder", title: "Reminder: your collection visit is tomorrow", body: "Bring your ration card. Your booking QR code is in the app.", createdAt: "2026-11-10T18:00:00+05:30", readAt: null },
+    { id: "h2", kind: "booking.confirmed", title: "Booked: your next collection visit", body: "Show your booking QR code or code at the shop. Booking is optional; you can still walk in.", createdAt: "2026-11-09T19:30:00+05:30", readAt: null },
+    { id: "h1", kind: "queue.served", title: "Visit completed", body: "Thank you for visiting.", createdAt: "2026-11-04T09:25:00+05:30", readAt: "2026-11-04T10:00:00+05:30" },
+  ],
   shop: [
     { id: "n4", kind: "shipment.dispatched", title: "SH-00005 is on its way", body: "Expected by 11 Nov 2026. Confirm the quantities that arrive.", createdAt: "2026-11-09T08:15:00+05:30", readAt: null },
     { id: "n3", kind: "stock.low", title: "Sugar is at or below its threshold", body: "35 kg left. Threshold 50 kg.", createdAt: "2026-11-08T10:15:00+05:30", readAt: null },

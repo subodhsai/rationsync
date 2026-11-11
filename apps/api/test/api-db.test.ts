@@ -138,6 +138,6 @@ describe("GET /api/v1/beneficiary/overview", () => {
 
   it("returns an empty overview before a card is linked", async () => {
     const res = await get("/api/v1/beneficiary/overview", "unlinked");
-    expect(res.body).toEqual({ card: null, shop: null, stock: [], upcomingBooking: null });
+    expect(res.body).toEqual({ card: null, shop: null, stock: [], upcomingBooking: null, unreadNotifications: 0 });
   });
 });

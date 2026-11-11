@@ -8,7 +8,7 @@ export const accountTypeSchema = z.enum(["beneficiary", "shop_admin"]);
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export type ShopStatus = "pending" | "approved" | "rejected";
-export type BookingStatus = "booked" | "cancelled" | "checked_in";
+export type BookingStatus = "booked" | "cancelled" | "checked_in" | "no_show";
 export type Language = "en" | "kn";
 export type CardCategory = "AAY" | "PHH" | "NPHH";
 
@@ -86,7 +86,7 @@ export interface ShopRegistrationSummary {
 }
 
 export interface BeneficiaryOverview {
-  card: { cardNumber: string; category: CardCategory; memberCount: number } | null;
+  card: { cardNumber: string; category: CardCategory; memberCount: number; linkedAt: string } | null;
   shop: {
     fpsId: string;
     name: string;
@@ -95,7 +95,9 @@ export interface BeneficiaryOverview {
     contactPhone: string;
   } | null;
   stock: Array<Pick<InventoryItem, "commodityCode" | "nameEn" | "nameKn" | "unit"> & { level: StockLevel }>;
-  upcomingBooking: { id: string; startsAt: string; endsAt: string; status: BookingStatus } | null;
+  /** The next active or checked-in booking, with its queue position when checked in today. */
+  upcomingBooking: BeneficiaryBooking | null;
+  unreadNotifications: number;
 }
 
 // Phase 2: applications, review, stock operations, alerts ----------------------
@@ -695,4 +697,212 @@ export interface WarehouseOverviewResponse {
   metrics: WarehouseOverview;
   requests: ReplenishmentRequest[];
   shipments: ShipmentSummary[];
+}
+
+// Phase 4: card linking, collection slots, bookings, check-in, queue -------------
+
+export const DEMO_CARD_PATTERN = /^DEMO-\d{6}$/;
+
+export const cardLinkSchema = z.object({
+  cardNumber: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(DEMO_CARD_PATTERN, "Demo card numbers look like DEMO-000101. Real ration-card numbers are not accepted."),
+  headOfFamily: z.string().trim().min(2, "Enter the head of family as printed on the demo card").max(120),
+});
+
+export const profileSchema = z.object({
+  fullName: z.string().trim().min(2, "Enter your name").max(120),
+  preferredLanguage: z.enum(["en", "kn"]),
+});
+
+export const slotChoiceSchema = z.object({ slotId: z.uuid("Choose a time") });
+
+/** A QR scan sends the full token; a person types the 10-character code, with or without dashes. */
+export const checkInSchema = z.union([
+  z.object({ token: z.string().trim().regex(/^[0-9a-fA-F]{32}$/, "That QR code is not a RationSync booking") }),
+  z.object({
+    code: z
+      .string()
+      .transform((s) => s.replace(/[^0-9A-Za-z]/g, "").toUpperCase())
+      .pipe(z.string().regex(/^[0-9A-F]{10}$/, "Booking codes have 10 letters and digits, like 4F2A-9C1B-7D")),
+  }),
+]);
+
+export const walkInSchema = z.object({ note: z.string().trim().max(80, "Keep the note under 80 characters").optional() });
+
+export const SLOT_LENGTHS = [30, 60, 90, 120] as const;
+const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour time, like 09:00");
+const minutesOf = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+
+export const scheduleWindowSchema = z
+  .object({
+    weekday: z.coerce.number().int().min(1).max(7),
+    startTime: clock,
+    endTime: clock,
+    slotMinutes: z.coerce
+      .number()
+      .refine((n): n is (typeof SLOT_LENGTHS)[number] => (SLOT_LENGTHS as readonly number[]).includes(n), "Choose 30, 60, 90 or 120 minutes"),
+    capacity: z.coerce.number().int().min(1, "At least 1").max(500),
+    walkInReserve: z.coerce.number().int().min(0),
+  })
+  .refine((w) => minutesOf(w.endTime) - minutesOf(w.startTime) >= w.slotMinutes, {
+    path: ["endTime"],
+    message: "The window must be at least one slot long",
+  })
+  .refine((w) => w.walkInReserve < w.capacity, { path: ["walkInReserve"], message: "Keep fewer walk-in places than the capacity" });
+
+export const scheduleSchema = z
+  .object({ windows: z.array(scheduleWindowSchema).max(28) })
+  .refine(
+    ({ windows }) =>
+      !windows.some((a, i) =>
+        windows.some(
+          (b, j) =>
+            i !== j && a.weekday === b.weekday && minutesOf(a.startTime) <= minutesOf(b.startTime) && minutesOf(b.startTime) < minutesOf(a.endTime),
+        ),
+      ),
+    { path: ["windows"], message: "Two windows on the same day overlap" },
+  );
+export type ScheduleWindow = z.infer<typeof scheduleWindowSchema>;
+
+export const publishSlotsSchema = z.object({ days: z.coerce.number().int().min(1).max(14) });
+
+export const slotStatusSchema = z
+  .object({ status: z.enum(["open", "paused", "closed"]), reason: z.string().trim().max(300).optional() })
+  .refine((v) => v.status !== "closed" || (v.reason?.length ?? 0) >= 3, {
+    path: ["reason"],
+    message: "Tell households why this time is closed",
+  });
+
+export type SlotStatus = "open" | "paused" | "closed";
+export type QueueStatus = "waiting" | "serving" | "served" | "no_show";
+
+/** "4F2A9C1B7D" to "4F2A-9C1B-7D", for reading aloud or typing. */
+export const formatBookingCode = (code: string) => `${code.slice(0, 4)}-${code.slice(4, 8)}-${code.slice(8)}`;
+
+// Waiting-time estimate: people ahead times the median observed counter time at this shop.
+// Without enough observed visits it says so instead of guessing.
+export const MIN_SERVICE_SAMPLES = 5;
+export const SERVICE_WINDOW_DAYS = 7;
+
+export type WaitEstimate =
+  | { status: "estimate"; minutes: number; basis: string }
+  | { status: "insufficient"; basis: string };
+
+export function estimateWait(serviceSeconds: number[], peopleAhead: number): WaitEstimate {
+  if (serviceSeconds.length < MIN_SERVICE_SAMPLES) {
+    return {
+      status: "insufficient",
+      basis: `Needs at least ${MIN_SERVICE_SAMPLES} completed visits at this shop in the last ${SERVICE_WINDOW_DAYS} days; has ${serviceSeconds.length}.`,
+    };
+  }
+  const sorted = [...serviceSeconds].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return {
+    status: "estimate",
+    minutes: Math.ceil((peopleAhead * median) / 60),
+    basis: `About ${Math.max(1, Math.round(median / 60))} min per visit, the median of ${sorted.length} visits at this shop in the last ${SERVICE_WINDOW_DAYS} days.`,
+  };
+}
+
+export interface CollectionSlot {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  capacity: number;
+  walkInReserve: number;
+  booked: number;
+  /** Bookable places left: capacity minus walk-in places minus bookings. */
+  remaining: number;
+  status: SlotStatus;
+  statusReason: string | null;
+}
+
+export interface QueuePosition {
+  number: number;
+  status: QueueStatus;
+  nowServing: number | null;
+  peopleAhead: number;
+  estimate: WaitEstimate;
+}
+
+export interface BeneficiaryBooking {
+  id: string;
+  status: BookingStatus;
+  startsAt: string;
+  endsAt: string;
+  /** Present only on the owner's own booking detail, for the QR code. */
+  token?: string;
+  code: string;
+  shop: { name: string; fpsId: string; address: string };
+  createdAt: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  checkedInAt: string | null;
+  noShowAt: string | null;
+  rescheduledFrom: string | null;
+  queue: QueuePosition | null;
+}
+
+export interface QueueEntry {
+  id: string;
+  number: number;
+  status: QueueStatus;
+  kind: "booking" | "walk_in";
+  note: string | null;
+  bookingCode: string | null;
+  slotStartsAt: string | null;
+  checkedInAt: string;
+  calledAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface ShopAppointment {
+  id: string;
+  code: string;
+  status: BookingStatus;
+  slotId: string;
+  startsAt: string;
+  endsAt: string;
+  /** Masked, as on every screen. */
+  cardNumber: string;
+  memberCount: number;
+  checkedInAt: string | null;
+  queueNumber: number | null;
+}
+
+export interface ShopQueue {
+  date: string;
+  nowServing: QueueEntry | null;
+  waiting: QueueEntry[];
+  finished: QueueEntry[];
+  /** Bookings for today that have not arrived yet. */
+  expected: ShopAppointment[];
+  estimate: WaitEstimate;
+}
+
+export interface ShopSlot extends CollectionSlot {
+  checkedIn: number;
+  notAttended: number;
+}
+
+export interface AttendanceSummary {
+  days: number;
+  booked: number;
+  attended: number;
+  notAttended: number;
+  cancelled: number;
+  walkIns: number;
+  served: number;
+  calledNotPresent: number;
+  medianServiceMinutes: number | null;
+  serviceSamples: number;
+}
+
+export interface CheckInResult {
+  alreadyCheckedIn: boolean;
+  entry: QueueEntry;
 }

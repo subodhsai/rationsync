@@ -42,6 +42,26 @@ const hintStatus: Record<string, number> = {
   items_mismatch: 400,
   receipt_exceeds_dispatch: 400,
   note_required: 400,
+  // Phase 4
+  forbidden: 403,
+  card_already_linked: 409,
+  too_many_attempts: 429,
+  booking_not_active: 409,
+  same_slot: 400,
+  schedule_overlap: 400,
+  invalid_days: 400,
+  slot_not_found: 404,
+  slot_closed: 409,
+  reason_required: 400,
+  invalid_token: 404,
+  booking_cancelled: 409,
+  booking_no_show: 409,
+  too_early: 409,
+  booking_expired: 409,
+  someone_serving: 409,
+  queue_empty: 409,
+  invalid_outcome: 400,
+  queue_entry_not_found: 404,
 };
 
 const noWarehouseStock: [number, string, string] = [
@@ -76,6 +96,15 @@ const constraintErrors: Record<string, [number, string, string]> = {
     "request_exists",
     "There is already an open request for this commodity. Wait for it to be decided, or cancel it first.",
   ],
+  bookings_one_active_per_beneficiary: [
+    409,
+    "active_booking_exists",
+    "You already have an upcoming booking. Cancel or move it before booking another time.",
+  ],
+  // Same answer as a failed match, so a person cannot learn which cards are already linked.
+  beneficiary_cards_card_id_key: [422, "card_not_verified", "No demo card matches those details."],
+  shop_booking_schedule_pkey: [400, "schedule_overlap", "Two windows on the same day start at the same time."],
+  queue_entries_one_serving: [409, "someone_serving", "Someone is already at the counter. Finish that visit first."],
   shipment_items_receipt_within_dispatched: [
     400,
     "receipt_exceeds_dispatch",

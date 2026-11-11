@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { signOut } from "@/lib/actions";
 import { roleLabel } from "@/lib/format";
 import { getSession } from "@/lib/session";
+import { cn } from "@/lib/utils";
 
 const areaLabel: Record<ConsoleArea, string> = { shop: "Shop console", warehouse: "Warehouse console" };
 
@@ -73,7 +74,7 @@ export function AppShell({ area, children }: { area: ConsoleArea; children: Reac
 }
 
 /** Single-column layout for beneficiaries and account screens. */
-export function SimpleShell({ children, signedIn = true }: { children: ReactNode; signedIn?: boolean }) {
+export function SimpleShell({ children, signedIn = true, nav }: { children: ReactNode; signedIn?: boolean; nav?: ReactNode }) {
   return (
     <>
       <PrototypeNotice />
@@ -90,7 +91,9 @@ export function SimpleShell({ children, signedIn = true }: { children: ReactNode
           )}
         </div>
       </header>
-      <main id="main" className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      {nav}
+      {/* Room at the bottom on phones for the fixed tab bar. */}
+      <main id="main" className={cn("mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-8", nav && "pb-28 sm:pb-8")}>
         <DemoDataNotice />
         {children}
       </main>

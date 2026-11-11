@@ -19,7 +19,6 @@ import { ApiError, apiGet } from "@/lib/api";
 import {
   demoAlerts,
   demoApplication,
-  demoBeneficiaryOverview,
   demoCommodities,
   demoInventory,
   demoMovements,
@@ -29,6 +28,7 @@ import {
   demoWarehouses,
 } from "@/lib/fixtures";
 import type { Session } from "@/lib/session";
+import { demoBeneficiaryOverview } from "@/lib/visit-fixtures";
 
 // Each loader reads fixtures in preview mode and the Render API otherwise. The contracts are
 // the shared types, so both paths render identically.
@@ -138,6 +138,7 @@ export async function getReviewHistory(session: Session): Promise<ReviewHistoryI
 export async function getBeneficiaryOverview(session: Session): Promise<BeneficiaryOverview> {
   if (session.mode === "demo") {
     await connection(); // the sample booking is relative to the current time
+    if (session.persona === "beneficiary-new") return { card: null, shop: null, stock: [], upcomingBooking: null, unreadNotifications: 0 };
     return demoBeneficiaryOverview(new Date());
   }
   return apiGet<BeneficiaryOverview>("/api/v1/beneficiary/overview", session.accessToken);

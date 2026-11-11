@@ -84,15 +84,23 @@ select format('DEMO-%s', lpad(n::text, 6, '0')),
        ])[1 + n % 4]::uuid
 from generate_series(101, 140) as n;
 
--- Two collection windows per working day for the next 7 days, in India Standard Time.
-insert into public.appointment_slots (shop_id, starts_at, ends_at, capacity)
+-- Collection schedule (Phase 4): Monday to Saturday, 9:00 to 11:00 and 16:00 to 18:00 in
+-- India Standard Time, one-hour slots for 15 visitors with 3 places kept for walk-ins.
+insert into public.shop_booking_schedule (shop_id, weekday, start_time, end_time, slot_minutes, capacity, walk_in_reserve)
+select s.id, w.day, t.starts, t.ends, 60, 15, 3
+from public.shops s
+cross join generate_series(1, 6) as w (day)
+cross join (values (time '09:00', time '11:00'), (time '16:00', time '18:00')) as t (starts, ends);
+
+-- Slots for the next 7 days from that schedule, the same rows publish_slots() would create.
+insert into public.appointment_slots (shop_id, starts_at, ends_at, capacity, walk_in_reserve)
 select s.id,
-       (d + w.starts) at time zone 'Asia/Kolkata',
-       (d + w.ends) at time zone 'Asia/Kolkata',
-       30
+       (d::date + w.starts) at time zone 'Asia/Kolkata',
+       (d::date + w.starts + interval '1 hour') at time zone 'Asia/Kolkata',
+       15, 3
 from public.shops s
 cross join generate_series(current_date + 1, current_date + 7, interval '1 day') as d
-cross join (values (time '09:00', time '11:00'), (time '16:00', time '18:00')) as w (starts, ends)
+cross join (values (time '09:00'), (time '10:00'), (time '16:00'), (time '17:00')) as w (starts)
 where extract(isodow from d) < 7;
 
 -- Warehouse stock (Phase 3). Opening balances go through the same function as later

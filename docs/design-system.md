@@ -86,3 +86,27 @@ Audit of the running warehouse overview, request decision, shipment, analytics a
 7. A demo dispatch note contradicted the demo data (it waited for a request that was already approved); replaced.
 
 Kept, deliberately: the reconciliation table scrolls sideways inside its own frame on phones rather than collapsing, because the nine quantities are only useful side by side; nothing is clipped.
+
+## Phase 4 additions
+
+- **Household screens** are a single column with four destinations (Home, Book, Visits, Help): a bottom tab bar on phones that respects the safe area, and a row of links on wider screens. Content is padded so the bar never covers it.
+- **Moments.** The booking pass: a large QR code with the booking code set in mono beneath it, easy to read aloud. The queue number in large mono figures, with one announced sentence ("Number 6: 2 people ahead of you") instead of several competing counters.
+- **Booking** is day, then time, then one confirm button pinned above the tab bar on phones. Full and paused times stay visible but cannot be chosen, so people can see why a time is unavailable.
+- **Shop queue** puts the counter first (number, Served, Not present), then waiting, then bookings not yet arrived; check-in and walk-in sit beside it on desktop and below on phones. Scanning uses the browser's BarcodeDetector where available; typing the code always works.
+- **Honest copy.** Household screens repeat that booking is optional and walk-ins are served; check-in is described as attendance, not e-POS authentication; waiting times appear only with five or more observed visits and are labelled estimates.
+
+UI UX Pro Max queries used: bottom navigation (keep back behaviour, do not cover content), date formatting (locale-aware IST dates), live status updates (one atomic status message, no focus moves), and its pre-delivery checklist (375px, touch targets of at least 44px, safe areas). A query about camera fallback returned nothing relevant, so the manual-code fallback follows general practice rather than a skill result.
+
+## Unslop review (Phase 4)
+
+Audit of the running household home, visit pass, booking, link-card, visits, help, shop queue and appointments screens at 375px and 1280px. Findings fixed:
+
+1. The booking page was 752px wide on a 375px phone. Two causes: a `fieldset` keeps the width of its widest child, so the day row could not scroll; and the visually hidden radios inside the day chips were absolutely positioned outside the scroll container. The fieldset now has `min-w-0` and each chip is `relative`.
+2. Outline buttons were nearly invisible across the whole app: their border used the decorative divider colour and their background matched the page. They now use the form-control border (3.6:1) on a white surface.
+3. Slots that had already ended still said "Taking bookings" and offered Pause and Close. Ended slots now say "Finished", started ones "In progress, no new bookings", and the controls appear only before a slot starts.
+4. Slot times wrapped onto two lines in the calendar; the column is wider and no longer wraps.
+5. A waiting-row button labelled "Left" read as a direction; it is now "Mark as left".
+6. Segmented tabs were 36px tall; they are now 44px everywhere.
+7. Found while testing: cancelling or moving another household's booking answered "no longer active", which revealed that the booking existed. Those routes now check ownership first and answer "not found".
+
+Checked and kept: no gradients, glows, emoji or invented figures; every status pairs a word and an icon; no horizontal scroll on any household or shop page at 375px; preview mode answers as the API would and saves nothing.

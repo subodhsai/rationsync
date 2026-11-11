@@ -58,3 +58,11 @@ export const warehouseMovementKindLabel: Record<WarehouseMovementKind, string> =
 
 /** Today in India Standard Time, as YYYY-MM-DD. */
 export const todayIst = () => new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+
+const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
+/** YYYY-MM-DD of a timestamp in India Standard Time, for grouping by day. */
+export const istDateKey = (iso: string) => dateKey.format(new Date(iso));
+const shortDay = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" });
+/** "Tue, 12 Nov" */
+export const formatShortDay = (iso: string) => shortDay.format(new Date(iso));
+export const formatTime = (iso: string) => time.format(new Date(iso));

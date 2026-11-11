@@ -17,7 +17,7 @@ export function FilterTabs({
           href={o.href}
           aria-current={o.current ? "page" : undefined}
           className={cn(
-            "flex h-9 shrink-0 items-center rounded-md px-3.5 text-[0.9375rem] transition-colors duration-150",
+            "flex h-11 shrink-0 items-center rounded-md px-3.5 text-[0.9375rem] transition-colors duration-150",
             o.current ? "bg-primary-tint font-medium text-primary" : "text-muted-foreground hover:text-foreground",
           )}
         >

@@ -1,5 +1,4 @@
 import type {
-  BeneficiaryOverview,
   Commodity,
   InventoryItem,
   Me,
@@ -11,16 +10,16 @@ import type {
   StockMovement,
   WarehouseOption,
 } from "@rationsync/shared";
-import { stockLevel } from "@rationsync/shared";
 
 // FICTIONAL PREVIEW DATA, mirroring supabase/seed.sql. Shown only while Supabase is not
 // configured, and always under a "Demo data" banner. Preview actions validate input but save nothing.
 
-export const DEMO_PERSONAS = ["beneficiary", "shop", "shop-new", "shop-pending", "shop-rejected", "warehouse"] as const;
+export const DEMO_PERSONAS = ["beneficiary", "beneficiary-new", "shop", "shop-new", "shop-pending", "shop-rejected", "warehouse"] as const;
 export type DemoPersona = (typeof DEMO_PERSONAS)[number];
 
 export const demoPersonaLabels: Record<DemoPersona, { title: string; detail: string }> = {
   beneficiary: { title: "Beneficiary", detail: "Household linked to Demo FPS Kuvempunagar" },
+  "beneficiary-new": { title: "Beneficiary, new", detail: "Has not linked a demo card yet" },
   shop: { title: "Shop administrator", detail: "Approved shop DEMO-FPS-MYS-0101" },
   "shop-new": { title: "Shop administrator, new", detail: "Has not applied yet" },
   "shop-pending": { title: "Shop administrator, awaiting approval", detail: "Application under review" },
@@ -64,6 +63,14 @@ export const demoMe: Record<DemoPersona, Me> = {
     id: "demo-beneficiary",
     role: "beneficiary",
     fullName: "Demo household 101",
+    preferredLanguage: "en",
+    shop: null,
+    warehouseIds: [],
+  },
+  "beneficiary-new": {
+    id: "demo-beneficiary-new",
+    role: "beneficiary",
+    fullName: "Demo new household",
     preferredLanguage: "en",
     shop: null,
     warehouseIds: [],
@@ -283,35 +290,5 @@ export function demoShopDetail(shopId: string): ShopDetail | null {
     ...application,
     inventory: inventoryByShop[shopId] ?? [],
     alerts: demoAlerts.filter((a) => a.shopId === shopId),
-  };
-}
-
-/** Built per request so the sample appointment stays in the future. */
-export function demoBeneficiaryOverview(now: Date): BeneficiaryOverview {
-  const tomorrow = new Date(now);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const day = tomorrow.toISOString().slice(0, 10);
-  return {
-    card: { cardNumber: "•••••••••01", category: "PHH", memberCount: 4 },
-    shop: {
-      fpsId: approvedShop.fpsId,
-      name: approvedShop.name,
-      address: "2nd Cross, Kuvempunagar, Mysuru",
-      openingHours: "Mon to Sat, 8:00 to 12:00 and 16:00 to 20:00",
-      contactPhone: "+91 90000 00101",
-    },
-    stock: demoInventory.map(({ commodityCode, nameEn, nameKn, unit, quantity, lowStockThreshold }) => ({
-      commodityCode,
-      nameEn,
-      nameKn,
-      unit,
-      level: stockLevel(quantity, lowStockThreshold),
-    })),
-    upcomingBooking: {
-      id: "demo-booking",
-      startsAt: `${day}T09:00:00+05:30`,
-      endsAt: `${day}T11:00:00+05:30`,
-      status: "booked",
-    },
   };
 }

@@ -41,7 +41,11 @@ npm run build
    1. `supabase/migrations/20261110000000_initial_schema.sql`: profiles and roles, warehouses, shops, commodities, inventory and the stock ledger, demo ration cards, appointment slots and bookings, notifications, audit log.
    2. `supabase/migrations/20261111000000_shops_inventory_alerts.sql`: application fields (PIN code, email), `shop_reviews` decision history, `shop_documents`, `stock_alerts`, and the functions `submit_shop_registration`, `review_shop`, `set_low_stock_threshold` and `refresh_stock_alert`. It also creates the private Storage bucket `shop-documents` (5 MB, PDF/JPEG/PNG) with its access policies.
    3. `supabase/migrations/20261112000000_warehouse_supply_chain.sql`: warehouse stock (`warehouse_inventory`, append-only `warehouse_stock_movements`), `replenishment_requests`, `shipments` with an explicit status-transition trigger, `shipment_items`, `delivery_discrepancies`, a `target_stock` column on shop inventory, and the functions `create_replenishment_request`, `decide_replenishment_request`, `create_shipment`, `dispatch_shipment`, `receive_shipment`, `resolve_discrepancy` and friends. Additive only: no table or column is dropped.
-   4. `supabase/seed.sql`: fictional warehouses, shops, stock history, open alerts, warehouse opening balances, demo cards and slots.
+   4. `supabase/migrations/20261113000000_booking_status_no_show.sql`: adds the `no_show` booking status, alone because a new enum value cannot be used in the same transaction.
+   5. `supabase/migrations/20261113000100_bookings_queue.sql`: demo card linking with attempt limits, weekly booking schedules, slot pause and close, walk-in places per slot, booking check codes, reschedule, the `queue_entries` table with its transition trigger, check-in, walk-ins, reminders. Additive only.
+   6. `supabase/seed.sql`: fictional warehouses, shops, stock history, open alerts, warehouse opening balances, demo cards, booking schedules and slots.
+
+   See [docs/supabase-integration.md](docs/supabase-integration.md) for the full checklist, risks and what the connected Supabase, Render and Vercel accounts currently contain.
 3. **Auth settings.** Authentication > URL Configuration: set Site URL to your web origin (`http://localhost:3000` locally) and add `http://localhost:3000/auth/confirm` (and your Vercel URL equivalent) to Redirect URLs.
 4. **API env** — create `apps/api/.env` from `apps/api/.env.example`:
    - `SUPABASE_URL`: Project Settings > API > Project URL
@@ -106,7 +110,18 @@ All routes are under `/api/v1`, need `Authorization: Bearer <Supabase access tok
 | `POST /warehouse/discrepancies/:id/resolve` | warehouse admin | Record how a shortage or damage was settled (moves no stock) |
 | `GET /warehouse/reconciliation?status`, `GET /warehouse/analytics` | warehouse admin | Requested, approved, dispatched and received per request; regional stock and usage |
 | `GET /notifications`, `POST /notifications/read` | any signed-in user | The caller's in-app notifications |
-| `GET /beneficiary/overview` | beneficiary | Linked shop, availability and next booking |
+| `GET /beneficiary/overview` | beneficiary | Linked shop, availability, next booking with queue position, unread count; adds due in-app reminders |
+| `GET /beneficiary/profile`, `PATCH /beneficiary/profile` | beneficiary | Name and language (the role is never writable) |
+| `POST /beneficiary/card-link` | beneficiary | Link a fictional `DEMO-` card by number and head of family; 5 failed attempts per hour, the same answer for every failure |
+| `GET /beneficiary/slots` | beneficiary | Open and paused slots at the linked shop for the next 7 days, with bookable places left |
+| `GET /beneficiary/bookings?scope=upcoming|past&page`, `GET /beneficiary/bookings/:id` | beneficiary | Own bookings; the QR token only on the owner's active booking |
+| `POST /beneficiary/bookings`, `/:id/cancel`, `/:id/reschedule` | beneficiary | Book (repeat-safe), cancel, move in one transaction |
+| `GET /shop/booking-schedule`, `POST /shop/booking-schedule`, `POST /shop/slots/publish` | approved shop admin | Weekly windows (capacity, walk-in places) and slot generation |
+| `GET /shop/slots?from&days`, `POST /shop/slots/:id/status` | approved shop admin | Calendar; pause, resume, or close with a reason (cancels and notifies bookings) |
+| `GET /shop/appointments?date` or `?scope=history&page`, `POST /shop/bookings/:id/no-show` | approved shop admin | Day list and history; mark a started booking not attended |
+| `POST /shop/check-ins` | approved shop admin | Check in by QR token or typed code, only at the booking's shop and within its window; a repeat returns the same queue entry |
+| `GET /shop/queue`, `POST /shop/queue/walk-ins`, `/call-next`, `/:id/finish` | approved shop admin | Today's queue, walk-ins, calling and finishing visits |
+| `GET /shop/attendance` | approved shop admin | Last 30 days of bookings, attendance, walk-ins and counter time, from records |
 
 ## Security model
 
@@ -122,6 +137,8 @@ All routes are under `/api/v1`, need `Authorization: Bearer <Supabase access tok
   - The shop confirms good and damaged quantities per item. Only good quantities are credited (`receipt` movement keyed by the item); shortages and damage become `delivery_discrepancies`. A second confirmation is refused.
   - Shipment status can only follow the transition table in `enforce_shipment_transition` (mirrored as `SHIPMENT_TRANSITIONS` in `packages/shared`). Cancellation is possible only before dispatch.
   - A shop administrator cannot decide requests (role check in the API, warehouse-assignment check in the database).
+- Booking and queue rules are in Postgres too. A slot's bookable places are capacity minus the places kept for walk-ins, and the conditional update cannot overfill it; one active booking per household (partial unique index); rescheduling releases and takes places in one transaction; check-in is accepted only at the booking's own shop, from an hour before to an hour after the slot, once (a repeat returns the same queue entry); queue numbers are allocated under a shop row lock; one visitor at the counter at a time; queue statuses follow a transition trigger. Check-in and "served" are attendance only: they create no distribution record and change no stock.
+- QR codes carry only the booking's random token (no personal data). The 10-character booking code typed as a fallback matches only within the checking shop's own bookings. Card linking accepts only `DEMO-` numbers, limits failures per account in the database, and gives every failure the same answer so taken cards cannot be discovered.
 - Automation is plain arithmetic in `packages/shared`, tested and shown on screen with its basis: suggested quantity = target (default twice the threshold) − on hand − approved stock on its way, only at or below the threshold and never while a request is open; recommended priority from stock against threshold and days of cover; coverage = stock ÷ average daily distribution over the last 30 days, refused with fewer than 3 distributions or 7 days of history. Suggestions never submit or approve anything.
 - Supporting documents live in a private bucket. Browsers upload with their own session into a folder named after their user id (Storage policy); the API records a file only after finding it there and takes size and type from Storage. Only the owner and administrators of the shop's warehouse can read it, through short-lived signed URLs.
 - Role layouts in the web app authorise on the server before rendering any role-specific navigation, and the proxy sends signed-out visitors to sign-in using the verified session. The API remains the authority for every operation.
@@ -129,8 +146,8 @@ All routes are under `/api/v1`, need `Authorization: Bearer <Supabase access tok
 
 ## Status
 
-Phases 1 (foundation), 2 (shop registration and review, inventory operations, low-stock alerts) and 3 (warehouse stock, replenishment requests, approvals with reservation, shipments, delivery confirmation and reconciliation, suggestions, in-app notifications) are in place. Not built yet: card linking, booking and QR check-in, Kannada interface, PWA. No delivery partner or upstream supply system is integrated; warehouse receipts are entered by hand.
+Phases 1 to 4 are in place: foundation; shop registration and review, inventory and low-stock alerts; warehouse stock, replenishment, shipments and reconciliation; and the household experience (demo card linking, profile, slot booking with reschedule and cancel, QR and code check-in, a virtual queue with walk-ins, in-app notifications and reminders, attendance summary). Not built yet: Kannada screens (household wording is centralised in `apps/web/src/lib/messages.ts`, awaiting a reviewed translation), PWA, email or SMS delivery, a scheduler for reminders (they appear when the household opens the app), and camera scanning on browsers without the BarcodeDetector API, such as Safari, which use the typed code instead.
 
-Verified against PGlite (Postgres compiled to WebAssembly) with the real migrations and seed. PGlite runs one connection, so the concurrency tests prove the decide-once and no-over-allocation rules but not Postgres row locking under real parallel load. Nothing has yet been run against a hosted Supabase project.
+Verified against PGlite (Postgres compiled to WebAssembly) with the real migrations and seed. PGlite runs one connection, so the concurrency tests prove the capacity and decide-once rules but not Postgres row locking under real parallel load. Nothing has yet been run against a hosted Supabase project; see [docs/supabase-integration.md](docs/supabase-integration.md).
 
 In preview mode (no Supabase), forms validate with the same schemas as the API and answer as the API would, but save nothing; document upload is turned off.

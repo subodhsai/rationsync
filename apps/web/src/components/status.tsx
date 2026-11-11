@@ -1,8 +1,22 @@
-import type { AlertStatus, RequestPriority, RequestStatus, ShipmentStatus, ShopStatus, StockLevel } from "@rationsync/shared";
+import type {
+  AlertStatus,
+  BookingStatus,
+  QueueStatus,
+  RequestPriority,
+  RequestStatus,
+  ShipmentStatus,
+  ShopStatus,
+  SlotStatus,
+  StockLevel,
+} from "@rationsync/shared";
 import {
   ArrowDown,
   ArrowUp,
   Ban,
+  CalendarCheck,
+  Megaphone,
+  Pause,
+  UserX,
   ChevronsUp,
   CircleAlert,
   CircleCheck,
@@ -118,3 +132,26 @@ export const PriorityLabel = ({ priority: p }: { priority: RequestPriority }) =>
 
 export const DiscrepancyLabel = ({ status }: { status: "open" | "resolved" }) =>
   fromSpec(status === "open" ? { tone: "warning", icon: CircleAlert, label: "Discrepancy open" } : { tone: "neutral", icon: CircleCheck, label: "Resolved" });
+
+const booking: Record<BookingStatus, Spec> = {
+  booked: { tone: "positive", icon: CalendarCheck, label: "Booked" },
+  checked_in: { tone: "positive", icon: CircleCheck, label: "Checked in" },
+  cancelled: { tone: "neutral", icon: Ban, label: "Cancelled" },
+  no_show: { tone: "warning", icon: UserX, label: "Not checked in" },
+};
+export const BookingStatusLabel = ({ status }: { status: BookingStatus }) => fromSpec(booking[status]);
+
+const queue: Record<QueueStatus, Spec> = {
+  waiting: { tone: "neutral", icon: Clock, label: "Waiting" },
+  serving: { tone: "positive", icon: Megaphone, label: "At the counter" },
+  served: { tone: "neutral", icon: CircleCheck, label: "Visit completed" },
+  no_show: { tone: "warning", icon: UserX, label: "Not present" },
+};
+export const QueueStatusLabel = ({ status }: { status: QueueStatus }) => fromSpec(queue[status]);
+
+const slot: Record<SlotStatus, Spec> = {
+  open: { tone: "positive", icon: CalendarCheck, label: "Taking bookings" },
+  paused: { tone: "warning", icon: Pause, label: "Paused" },
+  closed: { tone: "critical", icon: Ban, label: "Closed" },
+};
+export const SlotStatusLabel = ({ status }: { status: SlotStatus }) => fromSpec(slot[status]);

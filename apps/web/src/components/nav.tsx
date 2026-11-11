@@ -4,10 +4,12 @@ import {
   Bell,
   BellRing,
   Boxes,
+  CalendarDays,
   ChartColumn,
   ClipboardCheck,
   ClipboardList,
   History,
+  ListOrdered,
   LayoutGrid,
   Menu,
   ScrollText,
@@ -42,6 +44,13 @@ const navigation: Record<ConsoleArea, Array<{ label?: string; items: NavItem[] }
         { href: "/shop/inventory", label: "Inventory", icon: Boxes },
         { href: "/shop/movements", label: "Stock movements", icon: ScrollText },
         { href: "/shop/alerts", label: "Low-stock alerts", icon: BellRing },
+      ],
+    },
+    {
+      label: "Visits",
+      items: [
+        { href: "/shop/queue", label: "Today's queue", icon: ListOrdered },
+        { href: "/shop/appointments", label: "Appointments", icon: CalendarDays },
       ],
     },
     {
