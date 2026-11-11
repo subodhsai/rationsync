@@ -1,5 +1,20 @@
-import type { AlertStatus, ShopStatus, StockLevel } from "@rationsync/shared";
-import { CircleAlert, CircleCheck, CircleX, Clock } from "lucide-react";
+import type { AlertStatus, RequestPriority, RequestStatus, ShipmentStatus, ShopStatus, StockLevel } from "@rationsync/shared";
+import {
+  ArrowDown,
+  ArrowUp,
+  Ban,
+  ChevronsUp,
+  CircleAlert,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Minus,
+  PackageCheck,
+  PackageMinus,
+  PackageOpen,
+  TriangleAlert,
+  Truck,
+} from "lucide-react";
 import type { ComponentType } from "react";
 import { cn } from "@/lib/utils";
 
@@ -63,3 +78,43 @@ export function AlertStatusLabel({ status }: { status: AlertStatus }) {
     </StatusLabel>
   );
 }
+
+type Spec = { tone: Tone; icon: ComponentType<{ className?: string }>; label: string };
+const fromSpec = (s: Spec) => (
+  <StatusLabel tone={s.tone} icon={s.icon}>
+    {s.label}
+  </StatusLabel>
+);
+
+const request: Record<RequestStatus, Spec> = {
+  pending: { tone: "neutral", icon: Clock, label: "Pending" },
+  approved: { tone: "positive", icon: CircleCheck, label: "Approved" },
+  rejected: { tone: "critical", icon: CircleX, label: "Rejected" },
+  partially_fulfilled: { tone: "warning", icon: PackageMinus, label: "Partially fulfilled" },
+  fulfilled: { tone: "positive", icon: PackageCheck, label: "Fulfilled" },
+  cancelled: { tone: "neutral", icon: Ban, label: "Cancelled" },
+};
+export const RequestStatusLabel = ({ status }: { status: RequestStatus }) => fromSpec(request[status]);
+
+const shipment: Record<ShipmentStatus, Spec> = {
+  preparing: { tone: "neutral", icon: PackageOpen, label: "Preparing" },
+  dispatched: { tone: "neutral", icon: Truck, label: "Dispatched" },
+  in_transit: { tone: "neutral", icon: Truck, label: "In transit" },
+  delivered: { tone: "positive", icon: PackageCheck, label: "Delivered" },
+  partially_received: { tone: "warning", icon: PackageMinus, label: "Partially received" },
+  disputed: { tone: "critical", icon: TriangleAlert, label: "Disputed" },
+  cancelled: { tone: "neutral", icon: Ban, label: "Cancelled" },
+};
+export const ShipmentStatusLabel = ({ status }: { status: ShipmentStatus }) => fromSpec(shipment[status]);
+
+export const priorityLabel: Record<RequestPriority, string> = { urgent: "Urgent", high: "High", normal: "Normal", low: "Low" };
+const priority: Record<RequestPriority, Spec> = {
+  urgent: { tone: "critical", icon: ChevronsUp, label: "Urgent" },
+  high: { tone: "warning", icon: ArrowUp, label: "High" },
+  normal: { tone: "neutral", icon: Minus, label: "Normal" },
+  low: { tone: "neutral", icon: ArrowDown, label: "Low" },
+};
+export const PriorityLabel = ({ priority: p }: { priority: RequestPriority }) => fromSpec(priority[p]);
+
+export const DiscrepancyLabel = ({ status }: { status: "open" | "resolved" }) =>
+  fromSpec(status === "open" ? { tone: "warning", icon: CircleAlert, label: "Discrepancy open" } : { tone: "neutral", icon: CircleCheck, label: "Resolved" });

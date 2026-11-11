@@ -49,7 +49,7 @@ export function AppShell({ area, children }: { area: ConsoleArea; children: Reac
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-border bg-card px-3 py-4 lg:flex">
         <Brand className="px-2" />
         <p className="mt-1 px-2.5 text-[0.8125rem] text-muted-foreground">{areaLabel[area]}</p>
-        <nav aria-label="Main" className="mt-6">
+        <nav aria-label="Main" className="-mx-1 mt-6 min-h-0 flex-1 overflow-y-auto px-1">
           <NavLinks area={area} />
         </nav>
         <div className="mt-auto">

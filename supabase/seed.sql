@@ -94,3 +94,27 @@ from public.shops s
 cross join generate_series(current_date + 1, current_date + 7, interval '1 day') as d
 cross join (values (time '09:00', time '11:00'), (time '16:00', time '18:00')) as w (starts, ends)
 where extract(isodow from d) < 7;
+
+-- Warehouse stock (Phase 3). Opening balances go through the same function as later
+-- receipts and adjustments. Quantities are invented demo values, not real allocations.
+select public.apply_warehouse_movement(s.warehouse_id::uuid, s.code, 'opening_balance', s.qty,
+                                       'Demo opening balance', null, null, 'seed-wh-opening-' || s.warehouse_id || '-' || s.code)
+from (values
+  ('0d9a0000-0000-4000-a000-000000000001', 'RICE', 18000.00),
+  ('0d9a0000-0000-4000-a000-000000000001', 'WHEAT', 2400.00),
+  ('0d9a0000-0000-4000-a000-000000000001', 'RAGI', 5200.00),
+  ('0d9a0000-0000-4000-a000-000000000001', 'JOWAR', 600.00),
+  ('0d9a0000-0000-4000-a000-000000000001', 'SUGAR', 900.00),
+  ('0d9a0000-0000-4000-a000-000000000002', 'RICE', 15500.00),
+  ('0d9a0000-0000-4000-a000-000000000002', 'WHEAT', 3100.00),
+  ('0d9a0000-0000-4000-a000-000000000002', 'JOWAR', 4800.00),
+  ('0d9a0000-0000-4000-a000-000000000002', 'SUGAR', 350.00)
+) as s (warehouse_id, code, qty);
+
+update public.warehouse_inventory set low_stock_threshold = case commodity_code
+  when 'RICE' then 5000
+  when 'WHEAT' then 1000
+  when 'RAGI' then 1500
+  when 'JOWAR' then 1000
+  when 'SUGAR' then 400
+end;

@@ -67,6 +67,8 @@ export interface InventoryItem {
   unit: string;
   quantity: number;
   lowStockThreshold: number;
+  /** Fill-up level for replenishment suggestions; null means twice the threshold. */
+  targetStock: number | null;
   updatedAt: string;
 }
 
@@ -269,4 +271,428 @@ export interface ReviewHistoryItem extends ShopReview {
   shopId: string;
   shopName: string;
   fpsId: string;
+}
+
+// Phase 3: warehouse stock, replenishment, shipments, reconciliation ------------
+
+export const REQUEST_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
+export type RequestPriority = (typeof REQUEST_PRIORITIES)[number];
+export const REQUEST_STATUSES = ["pending", "approved", "rejected", "partially_fulfilled", "fulfilled", "cancelled"] as const;
+export type RequestStatus = (typeof REQUEST_STATUSES)[number];
+export const SHIPMENT_STATUSES = [
+  "preparing", "dispatched", "in_transit", "delivered", "partially_received", "disputed", "cancelled",
+] as const;
+export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
+export type WarehouseMovementKind = "opening_balance" | "receipt" | "adjustment" | "dispatch";
+
+/** Allowed status changes. The database trigger enforces the same table. */
+export const SHIPMENT_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
+  preparing: ["dispatched", "cancelled"],
+  dispatched: ["in_transit", "delivered", "partially_received", "disputed"],
+  in_transit: ["delivered", "partially_received", "disputed"],
+  disputed: ["delivered", "partially_received"],
+  delivered: [],
+  partially_received: [],
+  cancelled: [],
+};
+export const AWAITING_RECEIPT: ShipmentStatus[] = ["dispatched", "in_transit", "disputed"];
+export const ACTIVE_SHIPMENT: ShipmentStatus[] = ["preparing", ...AWAITING_RECEIPT];
+
+const reasonSchema = z.string().trim().min(3, "Say why, in a few words").max(500);
+
+export const replenishmentRequestSchema = z.object({
+  commodityCode: movementBase.commodityCode,
+  quantity: quantitySchema,
+  reason: reasonSchema,
+  priority: z.enum(REQUEST_PRIORITIES, { error: "Choose a priority" }),
+  suggestedQuantity: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().min(0).optional()),
+});
+export type ReplenishmentRequestInput = z.infer<typeof replenishmentRequestSchema>;
+
+export const requestDecisionSchema = z.discriminatedUnion("decision", [
+  z.object({ decision: z.literal("approved"), approvedQuantity: quantitySchema, reason: reviewDecisionSchema.shape.reason }),
+  z.object({ decision: z.literal("rejected"), reason: reviewDecisionSchema.shape.reason }),
+]);
+
+export const createShipmentSchema = z.object({
+  shopId: z.uuid(),
+  requestIds: z.array(z.uuid()).min(1, "Choose at least one approved request").max(20),
+  expectedDeliveryDate: z.iso.date("Enter the expected delivery date"),
+  notes: z.string().trim().max(500).optional(),
+});
+
+export const dispatchShipmentSchema = z.object({
+  expectedDeliveryDate: z.iso.date("Enter a valid date").optional(),
+});
+
+const receiptQuantity = z.coerce
+  .number({ error: "Enter a quantity, or 0" })
+  .min(0, "Cannot be negative")
+  .max(1_000_000)
+  .refine(twoDecimals, "Use at most two decimal places");
+
+export const receiveShipmentSchema = z.object({
+  items: z
+    .array(z.object({ itemId: z.uuid(), receivedQuantity: receiptQuantity, damagedQuantity: receiptQuantity }))
+    .min(1),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const reasonOnlySchema = z.object({ reason: reasonSchema });
+export const resolveDiscrepancySchema = z.object({ resolution: reasonSchema });
+
+export const warehouseMovementSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("opening_balance"), ...movementBase }),
+  z.object({ kind: z.literal("receipt"), reference: z.string().trim().max(100).optional(), ...movementBase }),
+  z.object({ kind: z.literal("adjustment"), direction: z.enum(["increase", "decrease"]), ...movementBase }),
+]);
+export type WarehouseMovementInput = z.infer<typeof warehouseMovementSchema>;
+
+export const warehouseMovementDelta = (input: WarehouseMovementInput) =>
+  input.kind === "adjustment" && input.direction === "decrease" ? -input.quantity : input.quantity;
+
+/** Threshold plus an optional target; the target must sit above the threshold. */
+export const stockLevelsSchema = thresholdSchema
+  .extend({
+    targetStock: z.preprocess(
+      (v) => (v === "" || v === null ? undefined : v),
+      z.coerce.number().positive().max(1_000_000).refine(twoDecimals, "Use at most two decimal places").optional(),
+    ),
+  })
+  .refine((v) => v.targetStock === undefined || v.targetStock > v.lowStockThreshold, {
+    path: ["targetStock"],
+    message: "The target must be above the low-stock threshold",
+  });
+
+// Automation rules -------------------------------------------------------------
+// Plain arithmetic on recorded movements, kept here so the API and preview mode agree and
+// every number can be explained on screen. Nothing here is a prediction model.
+
+export const FORECAST_WINDOW_DAYS = 30;
+export const MIN_HISTORY_DAYS = 7;
+export const MIN_DISTRIBUTIONS = 3;
+export const URGENT_COVER_DAYS = 3;
+export const HIGH_COVER_DAYS = 7;
+
+/** Distributions recorded in the last FORECAST_WINDOW_DAYS, over `days` of available history. */
+export interface UsageHistory {
+  distributed: number;
+  entries: number;
+  days: number;
+}
+
+export type Forecast =
+  | { status: "estimate"; dailyUsage: number; daysOfCover: number; basis: string }
+  | { status: "insufficient"; basis: string };
+
+const fmt = (n: number) => n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+export function forecastCoverage(onHand: number, usage: UsageHistory, unit: string): Forecast {
+  if (usage.days < MIN_HISTORY_DAYS || usage.entries < MIN_DISTRIBUTIONS || usage.distributed <= 0) {
+    return {
+      status: "insufficient",
+      basis: `Needs at least ${MIN_DISTRIBUTIONS} distributions over ${MIN_HISTORY_DAYS} days; has ${usage.entries} over ${usage.days} ${usage.days === 1 ? "day" : "days"}.`,
+    };
+  }
+  const daily = usage.distributed / usage.days;
+  return {
+    status: "estimate",
+    dailyUsage: Math.round(daily * 100) / 100,
+    daysOfCover: Math.floor(onHand / daily),
+    basis: `${fmt(usage.distributed)} ${unit} distributed in ${usage.entries} entries over the last ${usage.days} days, about ${fmt(daily)} ${unit} a day.`,
+  };
+}
+
+export interface PriorityRecommendation {
+  priority: RequestPriority;
+  reason: string;
+}
+
+export function recommendPriority(onHand: number, threshold: number, forecast: Forecast, unit: string): PriorityRecommendation {
+  const cover = forecast.status === "estimate" ? forecast.daysOfCover : null;
+  if (onHand <= 0) return { priority: "urgent", reason: "Out of stock." };
+  if (cover !== null && cover < URGENT_COVER_DAYS) {
+    return { priority: "urgent", reason: `About ${cover} ${cover === 1 ? "day" : "days"} of stock left at recent usage (under ${URGENT_COVER_DAYS}).` };
+  }
+  if (onHand <= threshold / 2) {
+    return { priority: "high", reason: `${fmt(onHand)} ${unit} is at or below half the ${fmt(threshold)} ${unit} threshold.` };
+  }
+  if (cover !== null && cover < HIGH_COVER_DAYS) {
+    return { priority: "high", reason: `About ${cover} days of stock left at recent usage (under ${HIGH_COVER_DAYS}).` };
+  }
+  if (onHand <= threshold) {
+    return { priority: "normal", reason: `${fmt(onHand)} ${unit} is at or below the ${fmt(threshold)} ${unit} threshold.` };
+  }
+  return { priority: "low", reason: `${fmt(onHand)} ${unit} is above the ${fmt(threshold)} ${unit} threshold.` };
+}
+
+export const priorityRank: Record<RequestPriority, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+/**
+ * How much to request: fill up to the target, less anything already approved and on its way.
+ * Offered only at or below the threshold, and never while a request for it is still open.
+ */
+export function suggestQuantity(input: {
+  onHand: number;
+  threshold: number;
+  target: number | null;
+  incoming: number;
+  hasOpenRequest: boolean;
+}): { quantity: number; target: number; targetIsDefault: boolean } {
+  const target = input.target ?? input.threshold * 2;
+  const needed = input.onHand <= input.threshold && !input.hasOpenRequest;
+  return {
+    quantity: needed ? Math.max(0, Math.ceil(target - input.onHand - input.incoming)) : 0,
+    target,
+    targetIsDefault: input.target === null,
+  };
+}
+
+export interface OpenRequestRef {
+  id: string;
+  reference: string;
+  status: RequestStatus;
+  quantity: number;
+}
+
+export interface ReplenishmentSuggestion {
+  commodityCode: string;
+  nameEn: string;
+  nameKn: string;
+  unit: string;
+  onHand: number;
+  threshold: number;
+  target: number;
+  targetIsDefault: boolean;
+  incoming: number;
+  openRequest: OpenRequestRef | null;
+  suggestedQuantity: number;
+  forecast: Forecast;
+  recommendation: PriorityRecommendation;
+}
+
+/** One commodity's suggestion from its stock row, open request and usage. */
+export function buildSuggestion(
+  item: Pick<InventoryItem, "commodityCode" | "nameEn" | "nameKn" | "unit" | "quantity" | "lowStockThreshold"> & {
+    targetStock: number | null;
+  },
+  openRequest: OpenRequestRef | null,
+  usage: UsageHistory,
+): ReplenishmentSuggestion {
+  const incoming = openRequest?.status === "approved" ? openRequest.quantity : 0;
+  const s = suggestQuantity({
+    onHand: item.quantity,
+    threshold: item.lowStockThreshold,
+    target: item.targetStock,
+    incoming,
+    hasOpenRequest: openRequest !== null,
+  });
+  const forecast = forecastCoverage(item.quantity, usage, item.unit);
+  return {
+    commodityCode: item.commodityCode,
+    nameEn: item.nameEn,
+    nameKn: item.nameKn,
+    unit: item.unit,
+    onHand: item.quantity,
+    threshold: item.lowStockThreshold,
+    target: s.target,
+    targetIsDefault: s.targetIsDefault,
+    incoming,
+    openRequest,
+    suggestedQuantity: s.quantity,
+    forecast,
+    recommendation: recommendPriority(item.quantity, item.lowStockThreshold, forecast, item.unit),
+  };
+}
+
+// Phase 3 API contracts ----------------------------------------------------------
+
+export interface ReplenishmentRequest {
+  id: string;
+  reference: string;
+  shopId: string;
+  shopName: string;
+  fpsId: string;
+  district: string;
+  warehouseId: string;
+  warehouseName: string;
+  commodityCode: string;
+  commodityName: string;
+  unit: string;
+  requestedQuantity: number;
+  approvedQuantity: number | null;
+  receivedQuantity: number | null;
+  stockAtRequest: number;
+  suggestedQuantity: number | null;
+  reason: string;
+  priority: RequestPriority;
+  status: RequestStatus;
+  decisionReason: string | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  requestedByName: string | null;
+  createdAt: string;
+  closedAt: string | null;
+  shipment: { id: string; reference: string; status: ShipmentStatus } | null;
+  /** From the shop's current stock and usage; included on warehouse views. */
+  recommendation?: PriorityRecommendation;
+}
+
+export interface RequestDetail extends ReplenishmentRequest {
+  shopStock: { onHand: number; threshold: number; target: number | null } | null;
+  warehouseStock: { onHand: number; reserved: number; available: number } | null;
+  forecast: Forecast;
+  recommendation: PriorityRecommendation;
+}
+
+export interface WarehouseStockItem {
+  warehouseId: string;
+  warehouseName: string;
+  commodityCode: string;
+  nameEn: string;
+  nameKn: string;
+  unit: string;
+  onHand: number;
+  reserved: number;
+  available: number;
+  inTransit: number;
+  lowStockThreshold: number;
+  updatedAt: string;
+}
+
+export interface WarehouseMovement {
+  id: string;
+  warehouseId: string;
+  commodityCode: string;
+  commodityName: string;
+  unit: string;
+  kind: WarehouseMovementKind;
+  quantityDelta: number;
+  balanceAfter: number;
+  reason: string;
+  reference: string | null;
+  shipmentId: string | null;
+  actorName: string | null;
+  createdAt: string;
+}
+
+export interface ShipmentSummary {
+  id: string;
+  reference: string;
+  status: ShipmentStatus;
+  warehouseId: string;
+  warehouseName: string;
+  shopId: string;
+  shopName: string;
+  fpsId: string;
+  expectedDeliveryDate: string;
+  createdAt: string;
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+  items: Array<{ commodityName: string; quantity: number; unit: string }>;
+  openDiscrepancies: number;
+}
+
+export interface ShipmentItem {
+  id: string;
+  requestId: string;
+  requestReference: string;
+  commodityCode: string;
+  commodityName: string;
+  unit: string;
+  requestedQuantity: number;
+  approvedQuantity: number;
+  quantity: number;
+  receivedQuantity: number | null;
+  damagedQuantity: number | null;
+  discrepancy: {
+    id: string;
+    shortageQuantity: number;
+    damagedQuantity: number;
+    status: "open" | "resolved";
+    resolution: string | null;
+    resolvedByName: string | null;
+    resolvedAt: string | null;
+  } | null;
+}
+
+export interface ShipmentDetail extends ShipmentSummary {
+  notes: string | null;
+  createdByName: string | null;
+  dispatchedByName: string | null;
+  inTransitAt: string | null;
+  receivedByName: string | null;
+  receiptNote: string | null;
+  disputedAt: string | null;
+  disputeReason: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  detailItems: ShipmentItem[];
+}
+
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface WarehouseOverview {
+  pendingRequests: number;
+  urgentRequests: number;
+  activeShipments: number;
+  awaitingReceipt: number;
+  overdueShipments: number;
+  lowStockShops: number;
+  openDiscrepancies: number;
+  lowWarehouseStock: number;
+}
+
+export interface ReconciliationRow {
+  requestId: string;
+  requestReference: string;
+  shipmentId: string | null;
+  shipmentReference: string | null;
+  shipmentStatus: ShipmentStatus | null;
+  shopName: string;
+  fpsId: string;
+  commodityName: string;
+  unit: string;
+  requested: number;
+  approved: number;
+  dispatched: number | null;
+  received: number | null;
+  damaged: number | null;
+  shortage: number | null;
+  discrepancyStatus: "open" | "resolved" | null;
+}
+
+export interface CommodityAnalytics {
+  commodityCode: string;
+  nameEn: string;
+  unit: string;
+  warehouseOnHand: number;
+  warehouseReserved: number;
+  warehouseAvailable: number;
+  inTransit: number;
+  shopStock: number;
+  shopsStocking: number;
+  shopsLow: number;
+  usage: UsageHistory;
+  forecast: Forecast;
+}
+
+export interface Page<T> {
+  items: T[];
+  page: number;
+  total: number;
+  pageSize: number;
+}
+
+export interface WarehouseOverviewResponse {
+  metrics: WarehouseOverview;
+  requests: ReplenishmentRequest[];
+  shipments: ShipmentSummary[];
 }

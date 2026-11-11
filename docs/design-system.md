@@ -62,3 +62,27 @@ Audit of the running registration, commodity, review and alert screens at 1280px
 6. A preview message used a hyphen as a minus sign; quantities use a true minus.
 
 Decisions taken from the skills: review decisions use a two-step confirmation stating the consequence (UI UX Pro Max: confirm irreversible actions; Apple Design: confirmation only where it cannot be undone). Forms keep what was typed after an error and move focus to an announced summary. Tables become lists on phones. Alerts are ordered by urgency and show the threshold behind them; nothing is labelled as a prediction.
+
+## Phase 3 additions
+
+- **Moments.** Warehouse stock is a stacked bar per commodity, available (green, amber when low) then reserved (neutral), with the warehouse threshold as a tick. Each request carries a quantity trail: requested, approved, dispatched, received in good condition, with any steps not yet taken saying "Not yet" instead of zero. Both always sit next to the same figures in text.
+- **Statuses.** Requests, shipments, priorities and discrepancies each pair a word with a distinct icon (for example Truck for dispatched and in transit, PackageMinus for partial outcomes, ChevronsUp for urgent). Colour is never the only signal.
+- **Navigation.** Sidebar items are grouped under short section labels (Stock, Supply, Shops) and scroll on short screens.
+- **Irreversible actions** (decisions, dispatch, delivery confirmation, cancellations, resolutions, disputes) open an inline confirmation stating the consequence. Routine ones (filters, paging) do not.
+- **Estimates** are labelled as estimates and show their basis; with too little history they say so instead of showing a number. Nothing is called a prediction or AI.
+
+UI UX Pro Max queries used: table filtering and pagination (responsive tables become lists; bulk selection for preparing shipments), confirmation of irreversible actions, inline form validation, and chart choice for part-to-whole data (stacked bar with direct values; the first chart query returned off-topic candlestick and radar results and was retried once).
+
+## Unslop review (Phase 3)
+
+Audit of the running warehouse overview, request decision, shipment, analytics and shop receipt screens at 1280px and 390px (15 warehouse URLs checked for horizontal overflow at 390px: none). Findings fixed:
+
+1. Preview receipt always failed: fixture ids were not UUIDs, and the schema error ("Invalid UUID") was shown under the Damaged field. Fixtures now use UUID-shaped ids like the seed, and only quantity errors attach to quantity fields.
+2. A shipment still being prepared listed its items as already dispatched. Dispatched now reads "Not yet" until dispatch is recorded.
+3. Six overview counts wrapped five-and-one, leaving an empty tinted block. The stat grid now fills every row (2, 3 or 6 columns; 2 or 4 for four counts).
+4. The coverage line repeated the daily usage figure, and said "About 0 days of stock". It now states days left once ("Less than a day" at zero) followed by its basis.
+5. "Suggested priority normal:" read as a fragment; it now reads "Suggested priority: Normal."
+6. Analytics said "0 of 0 shops at or below threshold" for a commodity no shop stocks; it now says so in words.
+7. A demo dispatch note contradicted the demo data (it waited for a request that was already approved); replaced.
+
+Kept, deliberately: the reconciliation table scrolls sideways inside its own frame on phones rather than collapsing, because the nine quantities are only useful side by side; nothing is clipped.

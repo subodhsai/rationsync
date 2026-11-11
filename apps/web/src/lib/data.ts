@@ -59,7 +59,8 @@ export async function getShopInventory(session: Session): Promise<InventoryItem[
 
 export async function getCommodities(session: Session): Promise<Commodity[]> {
   if (session.mode === "demo") return demoCommodities;
-  return (await live<{ items: Commodity[] }>(session, "/api/v1/shop/commodities")).items;
+  const area = session.me.role === "warehouse_admin" ? "warehouse" : "shop";
+  return (await live<{ items: Commodity[] }>(session, `/api/v1/${area}/commodities`)).items;
 }
 
 export async function getMovements(

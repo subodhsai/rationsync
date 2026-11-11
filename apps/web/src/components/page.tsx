@@ -1,7 +1,8 @@
-import { ChevronLeft } from "lucide-react";
+import { ArrowRight, ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 export function PageHeader({ title, meta, children }: { title: string; meta?: ReactNode; children?: ReactNode }) {
   return (
@@ -72,6 +73,67 @@ export function DetailList({ rows }: { rows: Array<[string, ReactNode]> }) {
           <dd>{value}</dd>
         </div>
       ))}
+    </dl>
+  );
+}
+
+export function SectionHeading({ id, title, href, linkLabel }: { id: string; title: string; href?: string; linkLabel?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <h2 id={id} className="text-lg font-semibold">
+        {title}
+      </h2>
+      {href && (
+        <Link
+          href={href}
+          className="inline-flex min-h-11 items-center gap-1 text-[0.9375rem] font-medium text-primary underline-offset-4 hover:underline"
+        >
+          {linkLabel}
+          <ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A row of counts, each worked out from records and optionally linking to the list behind it.
+ * `attention` marks a count that needs action while it is above zero.
+ */
+export function StatRow({
+  stats,
+}: {
+  stats: Array<{ label: string; value: number; href?: string; note?: string; attention?: boolean }>;
+}) {
+  return (
+    // Rows always fill: 2 columns on phones, then 3 (six stats) or 2 (four), then one row on wide screens.
+    <dl
+      style={{ "--stats": stats.length } as React.CSSProperties}
+      className={cn(
+        "grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-[repeat(var(--stats),minmax(0,1fr))]",
+        stats.length % 3 === 0 && "sm:grid-cols-3",
+      )}
+    >
+      {stats.map((stat) => {
+        const body = (
+          <>
+            <dt className="text-[0.8125rem] text-muted-foreground sm:text-[0.875rem]">{stat.label}</dt>
+            <dd className={cn("mt-1 text-2xl font-semibold tabular-nums", stat.attention && stat.value > 0 && "text-warning")}>
+              {stat.value}
+            </dd>
+            {stat.note && <dd className="mt-0.5 text-[0.8125rem] text-muted-foreground">{stat.note}</dd>}
+          </>
+        );
+        return stat.href ? (
+          <Link key={stat.label} href={stat.href} className="bg-card px-4 py-4 transition-colors duration-150 hover:bg-muted/50 sm:px-5">
+            {body}
+          </Link>
+        ) : (
+          <div key={stat.label} className="bg-card px-4 py-4 sm:px-5">
+            {body}
+          </div>
+        );
+      })}
     </dl>
   );
 }

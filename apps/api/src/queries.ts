@@ -32,7 +32,8 @@ export async function loadApplication(db: Db, shopId: string): Promise<ShopAppli
 export async function loadInventory(db: Db, shopId: string): Promise<InventoryItem[]> {
   const { rows } = await db.query<InventoryItem>(
     `select c.code as "commodityCode", c.name_en as "nameEn", c.name_kn as "nameKn", c.unit,
-            i.quantity::float8 as quantity, i.low_stock_threshold::float8 as "lowStockThreshold", i.updated_at as "updatedAt"
+            i.quantity::float8 as quantity, i.low_stock_threshold::float8 as "lowStockThreshold",
+            i.target_stock::float8 as "targetStock", i.updated_at as "updatedAt"
        from public.shop_inventory i
        join public.commodities c on c.code = i.commodity_code
       where i.shop_id = $1

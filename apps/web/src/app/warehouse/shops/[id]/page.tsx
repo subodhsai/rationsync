@@ -44,7 +44,7 @@ async function Detail({ params }: Pick<PageProps<"/warehouse/shops/[id]">, "para
   return (
     <>
       <div className="space-y-2">
-        <BackLink href={pending ? "/warehouse" : shop.status === "approved" ? "/warehouse/shops" : "/warehouse?status=rejected"}>
+        <BackLink href={pending ? "/warehouse/applications" : shop.status === "approved" ? "/warehouse/shops" : "/warehouse/applications?status=rejected"}>
           {pending ? "Applications" : shop.status === "approved" ? "Shop directory" : "Rejected applications"}
         </BackLink>
         <div className="space-y-1">

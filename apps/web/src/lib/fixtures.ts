@@ -96,12 +96,12 @@ export const demoMe: Record<DemoPersona, Me> = {
 
 const updated = "2026-11-08T10:15:00+05:30";
 
-const item = (code: string, quantity: number, lowStockThreshold: number, updatedAt = updated): InventoryItem => {
+const item = (code: string, quantity: number, lowStockThreshold: number, targetStock: number | null = null): InventoryItem => {
   const c = demoCommodities.find((x) => x.code === code)!;
-  return { commodityCode: code, nameEn: c.nameEn, nameKn: c.nameKn, unit: c.unit, quantity, lowStockThreshold, updatedAt };
+  return { commodityCode: code, nameEn: c.nameEn, nameKn: c.nameKn, unit: c.unit, quantity, lowStockThreshold, targetStock, updatedAt: updated };
 };
 
-export const demoInventory: InventoryItem[] = [item("RICE", 1840, 800), item("WHEAT", 120, 150), item("RAGI", 410, 200), item("SUGAR", 35, 50)];
+export const demoInventory: InventoryItem[] = [item("RICE", 1840, 800), item("WHEAT", 120, 150, 400), item("RAGI", 410, 200), item("SUGAR", 35, 50)];
 
 const inventoryByShop: Record<string, InventoryItem[]> = {
   [approvedShop.id]: demoInventory,

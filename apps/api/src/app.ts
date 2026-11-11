@@ -8,9 +8,12 @@ import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { errorHandler, HttpError, notFound } from "./errors.js";
 import { beneficiaryRouter } from "./routes/beneficiary.js";
+import { notificationsRouter } from "./routes/notifications.js";
 import { registrationRouter } from "./routes/registration.js";
+import { shopSupplyRouter } from "./routes/shop-supply.js";
 import { shopRouter } from "./routes/shop.js";
 import { warehouseRouter } from "./routes/warehouse.js";
+import { warehouseSupplyRouter } from "./routes/warehouse-supply.js";
 
 export interface AppDeps {
   config: Config;
@@ -52,8 +55,9 @@ export function createApp({ config, logger, db, verifyToken }: AppDeps) {
       res.json(actorOf(req));
     });
     v1.use("/registration", registrationRouter(db));
-    v1.use("/shop", shopRouter(db));
-    v1.use("/warehouse", warehouseRouter(db));
+    v1.use("/shop", shopRouter(db), shopSupplyRouter(db));
+    v1.use("/warehouse", warehouseRouter(db), warehouseSupplyRouter(db));
+    v1.use("/notifications", notificationsRouter(db));
     v1.use("/beneficiary", beneficiaryRouter(db));
   } else {
     // Fail closed: without auth configuration no protected route is reachable.

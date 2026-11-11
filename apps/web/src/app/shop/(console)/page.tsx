@@ -1,14 +1,14 @@
 import { stockLevel } from "@rationsync/shared";
-import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 import { AlertList } from "@/components/alert-list";
 import { MovementList } from "@/components/movement-list";
-import { PageHeader, PageSkeleton } from "@/components/page";
+import { PageHeader, PageSkeleton, SectionHeading, StatRow } from "@/components/page";
 import { ShopStatusLabel } from "@/components/status";
+import { ShipmentTable, SuggestionList } from "@/components/supply-lists";
 import { getMovements, getShopAlerts, getShopInventory } from "@/lib/data";
 import { requireApprovedShop } from "@/lib/session";
+import { getNotifications, getShopRequests, getShopShipments, getSuggestions } from "@/lib/supply-data";
 
 export const metadata: Metadata = { title: "Shop overview" };
 
@@ -20,36 +20,18 @@ export default function ShopOverviewPage() {
   );
 }
 
-function SectionHeading({ id, title, href, linkLabel }: { id: string; title: string; href: string; linkLabel: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <h2 id={id} className="text-lg font-semibold">
-        {title}
-      </h2>
-      <Link
-        href={href}
-        className="inline-flex min-h-11 items-center gap-1 text-[0.9375rem] font-medium text-primary underline-offset-4 hover:underline"
-      >
-        {linkLabel}
-        <ArrowRight className="size-4" aria-hidden="true" />
-      </Link>
-    </div>
-  );
-}
-
 async function Overview() {
   const session = await requireApprovedShop();
-  const [items, alerts, recent] = await Promise.all([
+  const [items, alerts, recent, suggestions, openRequests, incoming, notifications] = await Promise.all([
     getShopInventory(session),
     getShopAlerts(session, "open"),
     getMovements(session, { limit: 5 }),
+    getSuggestions(session),
+    getShopRequests(session, "open"),
+    getShopShipments(session, "incoming"),
+    getNotifications(session),
   ]);
   const levels = items.map((i) => stockLevel(i.quantity, i.lowStockThreshold));
-  const stats = [
-    { label: "Commodities tracked", value: items.length },
-    { label: "Low stock", value: levels.filter((l) => l === "low").length },
-    { label: "Out of stock", value: levels.filter((l) => l === "out").length },
-  ];
 
   return (
     <>
@@ -63,17 +45,29 @@ async function Overview() {
         }
       />
 
-      <dl className="grid grid-cols-3 divide-x divide-border rounded-lg border border-border bg-card">
-        {stats.map((stat) => (
-          <div key={stat.label} className="px-4 py-4 sm:px-5">
-            <dt className="text-[0.8125rem] text-muted-foreground sm:text-[0.875rem]">{stat.label}</dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums">{stat.value}</dd>
-          </div>
-        ))}
-      </dl>
+      <StatRow
+        stats={[
+          { label: "Low or out of stock", value: levels.filter((l) => l !== "ok").length, href: "/shop/alerts", attention: true },
+          { label: "Open requests", value: openRequests.length, href: "/shop/requests" },
+          { label: "Shipments on the way", value: incoming.length, href: "/shop/shipments", attention: true },
+          { label: "Unread notifications", value: notifications.unread, href: "/shop/notifications" },
+        ]}
+      />
+
+      {incoming.length > 0 && (
+        <section aria-labelledby="incoming" className="space-y-3">
+          <SectionHeading id="incoming" title="On the way to you" href="/shop/shipments" linkLabel="All shipments" />
+          <ShipmentTable rows={incoming} area="shop" emptyTitle="" />
+        </section>
+      )}
+
+      <section aria-labelledby="restock" className="space-y-3">
+        <SectionHeading id="restock" title="Restock" href="/shop/requests/new" linkLabel="New request" />
+        <SuggestionList items={suggestions} />
+      </section>
 
       <section aria-labelledby="attention" className="space-y-3">
-        <SectionHeading id="attention" title="Needs attention" href="/shop/alerts" linkLabel="All alerts" />
+        <SectionHeading id="attention" title="Low-stock alerts" href="/shop/alerts" linkLabel="All alerts" />
         <AlertList
           items={alerts}
           showShop={false}

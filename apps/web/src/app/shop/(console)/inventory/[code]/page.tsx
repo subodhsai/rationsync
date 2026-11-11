@@ -58,6 +58,12 @@ async function Commodity({ params }: Pick<PageProps<"/shop/inventory/[code]">, "
             <p className="text-[0.9375rem] text-muted-foreground tabular-nums">
               Threshold {formatQuantity(item.lowStockThreshold)} {item.unit} · last movement {formatDateTime(item.updatedAt)}
             </p>
+            <Link
+              href={`/shop/requests/new?commodity=${commodity.code}`}
+              className="inline-flex min-h-11 items-center text-[0.9375rem] font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Request more {commodity.nameEn.toLowerCase()}
+            </Link>
           </div>
           <StockMeter quantity={item.quantity} threshold={item.lowStockThreshold} className="h-2" />
         </section>
@@ -70,8 +76,8 @@ async function Commodity({ params }: Pick<PageProps<"/shop/inventory/[code]">, "
           <MovementForm commodity={commodity} stocked={Boolean(item)} />
         </Panel>
         {item && (
-          <Panel title="Low-stock threshold">
-            <ThresholdForm commodity={commodity} current={item.lowStockThreshold} />
+          <Panel title="Threshold and target">
+            <ThresholdForm commodity={commodity} current={item.lowStockThreshold} target={item.targetStock} />
           </Panel>
         )}
       </div>

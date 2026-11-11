@@ -102,7 +102,7 @@ export function MovementForm({ commodity, stocked }: { commodity: Commodity; sto
   );
 }
 
-export function ThresholdForm({ commodity, current }: { commodity: Commodity; current: number }) {
+export function ThresholdForm({ commodity, current, target }: { commodity: Commodity; current: number; target: number | null }) {
   const { state, onSubmit, pending, errorFor } = useFormAction(updateThreshold);
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4">
@@ -121,9 +121,22 @@ export function ThresholdForm({ commodity, current }: { commodity: Commodity; cu
         hint="An alert opens when stock is at or below this quantity, and closes once it rises above."
         error={errorFor("lowStockThreshold")}
       />
+      <Field
+        id="targetStock"
+        label={`Target stock (${commodity.unit})`}
+        optional
+        type="number"
+        inputMode="decimal"
+        min="0"
+        step="0.01"
+        defaultValue={target ?? ""}
+        className="max-w-48 tabular-nums"
+        hint="Replenishment suggestions fill up to this level. Leave blank for twice the threshold."
+        error={errorFor("targetStock")}
+      />
       <Button type="submit" variant="outline" disabled={pending}>
         {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-        Save threshold
+        Save levels
       </Button>
     </form>
   );

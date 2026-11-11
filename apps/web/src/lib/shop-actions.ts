@@ -4,32 +4,20 @@ import {
   movementDelta,
   shopRegistrationSchema,
   stockMovementSchema,
-  thresholdSchema,
+  stockLevelsSchema,
   type StockMovementInput,
 } from "@rationsync/shared";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { invalid, preview, type ActionState } from "@/lib/action-state";
-import { ApiError, apiSend } from "@/lib/api";
+import { fromApiError as fromError, entries } from "@/lib/action-helpers";
+import { apiSend } from "@/lib/api";
 import { demoInventory } from "@/lib/fixtures";
 import { formatDelta, formatQuantity } from "@/lib/format";
 import { requireApprovedShop, requireRole } from "@/lib/session";
 
-function fromApiError(err: unknown): ActionState {
-  if (!(err instanceof ApiError)) throw err;
-  const fieldErrors: Record<string, string> = {};
-  if (Array.isArray(err.details)) {
-    for (const d of err.details as Array<{ path?: string; message?: string }>) {
-      if (d.path && d.message) fieldErrors[d.path] ??= d.message;
-    }
-  }
-  if (err.code === "fps_id_taken") fieldErrors.fpsId = err.message;
-  return { status: "error", message: err.message, fieldErrors };
-}
-
-const entries = (formData: FormData) =>
-  Object.fromEntries([...formData.entries()].filter(([, v]) => typeof v === "string")) as Record<string, string>;
+const fromApiError = (err: unknown) => fromError(err, { fps_id_taken: "fpsId", insufficient_stock: "quantity" });
 
 export async function submitRegistration(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const session = await requireRole("shop_admin");
@@ -103,17 +91,24 @@ export async function recordMovement(_prev: ActionState, formData: FormData): Pr
 export async function updateThreshold(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const session = await requireApprovedShop();
   const values = entries(formData);
-  const parsed = thresholdSchema.safeParse(values);
+  const parsed = stockLevelsSchema.safeParse(values);
   const code = values.commodityCode ?? "";
   if (!parsed.success) return invalid(parsed.error);
-  const amount = `${formatQuantity(parsed.data.lowStockThreshold)} ${values.unit ?? ""}`.trim();
+  const unit = values.unit ?? "";
+  const amount = `${formatQuantity(parsed.data.lowStockThreshold)} ${unit}`.trim();
+  const target = parsed.data.targetStock
+    ? `${formatQuantity(parsed.data.targetStock)} ${unit}`
+    : `twice the threshold (${formatQuantity(parsed.data.lowStockThreshold * 2)} ${unit})`;
 
-  if (session.mode === "demo") return preview(`the low-stock threshold would become ${amount}.`);
+  if (session.mode === "demo") return preview(`the threshold would become ${amount} and the target ${target}.`);
   try {
-    await apiSend("PATCH", `/api/v1/shop/inventory/${encodeURIComponent(code)}/threshold`, session.accessToken, parsed.data);
+    await apiSend("PATCH", `/api/v1/shop/inventory/${encodeURIComponent(code)}/threshold`, session.accessToken, {
+      lowStockThreshold: parsed.data.lowStockThreshold,
+      targetStock: parsed.data.targetStock ?? null,
+    });
   } catch (err) {
     return fromApiError(err);
   }
   refresh();
-  return { status: "success", message: `Threshold set to ${amount}. Alerts were re-checked.` };
+  return { status: "success", message: `Threshold ${amount}, target ${target}. Alerts were re-checked.` };
 }
